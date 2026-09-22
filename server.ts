@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
-import { analyzeResume, AnalyzerError } from './lib/analyzer';
+import { analyzeResume, AnalyzerError } from './api/analyzer-core.js';
 
 dotenv.config();
 
