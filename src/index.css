@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-dark: #000000;
+    --bg-light: #f3f4f6;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden;
+  }
+}
+
+/* Glassmorphism utility classes */
+.glass-panel-dark {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.04);
+}
+
+.glass-upload-dark {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px dashed rgba(255, 255, 255, 0.18);
+}
+
+.glass-upload-light {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px dashed rgba(0, 0, 0, 0.18);
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-12px) scale(1.03);
+  }
+}
+
+@keyframes float-reverse {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(14px) scale(0.97);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 10s ease-in-out infinite;
+}
+
+/* Hard Metal Titanium Finish Shine Effect:
+   - Smooth continuous back-and-forth movement (no sudden restart jumps)
+   - Left to right sweep at 0.5x speed (4.0s)
+   - 3.0s resting pause at that point
+   - Right to left sweep back towards the left from that same point at 0.5x speed (4.0s)
+   - 3.0s resting pause at that point
+   - Total cycle = 14.0s
+*/
+@keyframes titanium-shimmer-sweep {
+  0% {
+    background-position: -200% center;
+  }
+  28.57% {
+    background-position: 200% center;
+  }
+  50% {
+    background-position: 200% center;
+  }
+  78.57% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+/* Deeper Shade Titanium Finish (for "show your" and "scans it") */
+.titanium-dark-deep {
+  background: linear-gradient(
+    105deg,
+    #71717a 0%,
+    #52525b 22%,
+    #a1a1aa 38%,
+    #f4f4f5 50%,
+    #e4e4e7 54%,
+    #a1a1aa 66%,
+    #52525b 78%,
+    #71717a 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: titanium-shimmer-sweep 14s ease-in-out infinite;
+  display: inline-block;
+}
+
+.titanium-light-deep {
+  background: linear-gradient(
+    105deg,
+    #52525b 0%,
+    #3f3f46 22%,
+    #71717a 38%,
+    #f4f4f5 50%,
+    #e4e4e7 54%,
+    #71717a 66%,
+    #3f3f46 78%,
+    #52525b 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: titanium-shimmer-sweep 14s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Lighter Silver Titanium Finish (for "RESUME") */
+.titanium-dark-silver {
+  background: linear-gradient(
+    105deg,
+    #94a3b8 0%,
+    #cbd5e1 20%,
+    #e2e8f0 36%,
+    #ffffff 50%,
+    #f8fafc 56%,
+    #e2e8f0 66%,
+    #cbd5e1 80%,
+    #94a3b8 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: titanium-shimmer-sweep 14s ease-in-out infinite;
+  display: inline-block;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.22));
+}
+
+.titanium-light-silver {
+  background: linear-gradient(
+    105deg,
+    #334155 0%,
+    #0f172a 20%,
+    #475569 36%,
+    #cbd5e1 50%,
+    #ffffff 55%,
+    #475569 66%,
+    #0f172a 80%,
+    #334155 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: titanium-shimmer-sweep 14s ease-in-out infinite;
+  display: inline-block;
+}
+
