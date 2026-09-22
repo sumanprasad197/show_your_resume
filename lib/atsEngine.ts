@@ -54,7 +54,6 @@ export function runLocalAtsAnalysis(resumeText: string, jobDescription: string):
 
   for (const skill of COMMON_SKILLS_DICTIONARY) {
     const skillLower = skill.toLowerCase();
-    // Check if skill appears in job description (with word boundary awareness)
     const escaped = skillLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
 
@@ -68,10 +67,14 @@ export function runLocalAtsAnalysis(resumeText: string, jobDescription: string):
     }
   }
 
-  // Also extract common tech terms / capitalized keywords from job description
+  // Extract common tech terms / capitalized keywords from job description
   const jobWords = jobDescription.match(/\b[A-Z][a-zA-Z0-9+#.-]{1,20}\b/g) || [];
   for (const word of jobWords) {
-    if (word.length > 2 && !demandedSkills.includes(word) && !['The', 'And', 'For', 'With', 'You', 'Our', 'We', 'Are', 'This', 'Will', 'Must', 'Have', 'Job', 'Role', 'Company', 'Team', 'Work', 'Years', 'Plus'].includes(word)) {
+    if (
+      word.length > 2 &&
+      !demandedSkills.includes(word) &&
+      !['The', 'And', 'For', 'With', 'You', 'Our', 'We', 'Are', 'This', 'Will', 'Must', 'Have', 'Job', 'Role', 'Company', 'Team', 'Work', 'Years', 'Plus'].includes(word)
+    ) {
       const wLower = word.toLowerCase();
       if (resumeLower.includes(wLower)) {
         if (matchedSet.size < 14) matchedSet.add(word);
@@ -86,7 +89,7 @@ export function runLocalAtsAnalysis(resumeText: string, jobDescription: string):
 
   // 2. Strict ATS Score Calculation
   const totalKeywords = matchedKeywords.length + missingKeywords.length;
-  let baseRatio = totalKeywords > 0 ? (matchedKeywords.length / totalKeywords) : 0.6;
+  const baseRatio = totalKeywords > 0 ? (matchedKeywords.length / totalKeywords) : 0.6;
 
   // Bonus for quantified achievements (e.g., % numbers, metrics) in resume
   const metricMatches = resumeText.match(/\b\d+(\.\d+)?%|\$\d+|\b\d+\+\s*(years|users|engineers|projects|clients)/gi) || [];

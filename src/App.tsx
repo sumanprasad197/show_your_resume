@@ -86,7 +86,7 @@ export default function App() {
     setResults(null);
 
     try {
-      const response = await fetch('/api/analyze-resume', {
+      const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,10 +97,22 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let data: any;
+
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        await response.text();
+        throw new Error(
+          response.status === 404
+            ? 'Endpoint not found (/api/analyze). Please ensure your deployment has active API routes.'
+            : `Server returned an unexpected response (${response.status}).`
+        );
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze resume. Please try again.');
+        throw new Error(data?.error || 'Failed to analyze resume. Please try again.');
       }
 
       setResults(data);
