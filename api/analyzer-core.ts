@@ -94,7 +94,7 @@ function runLocalAtsAnalysis(resumeText: string, jobDescription: string): ATSAna
     }
   }
 
-  // Extract common tech terms / capitalized keywords from job description
+  // Extract other legitimate technical keywords or capitalized terms from job description
   const jobWords = jobDescription.match(/\b[A-Z][a-zA-Z0-9+#.-]{1,20}\b/g) || [];
   for (const word of jobWords) {
     if (
@@ -114,27 +114,66 @@ function runLocalAtsAnalysis(resumeText: string, jobDescription: string): ATSAna
   const matchedKeywords = Array.from(matchedSet);
   const missingKeywords = Array.from(missingSet);
 
-  // 2. Strict ATS Score Calculation
-  const totalKeywords = matchedKeywords.length + missingKeywords.length;
-  const baseRatio = totalKeywords > 0 ? (matchedKeywords.length / totalKeywords) : 0.6;
+  // ==============================================================
+  // 4-PILLAR STRICT ATS SCORING ENGINE (CALIBRATED TO 100 POINTS)
+  // Mirrors the exact rubric given to the Gemini recruiter prompt:
+  // Pillar 1: Hard Skills & Keyword Match (40 pts)
+  // Pillar 2: Experience Relevance & Quantified Impact (30 pts)
+  // Pillar 3: Education & Foundation (15 pts)
+  // Pillar 4: ATS Formatting & Structure (15 pts)
+  // ==============================================================
 
-  // Bonus for quantified achievements (e.g., % numbers, metrics) in resume
-  const metricMatches = resumeText.match(/\b\d+(\.\d+)?%|\$\d+|\b\d+\+\s*(years|users|engineers|projects|clients)/gi) || [];
+  // Pillar 1: Hard Skills & Keyword Match (40 Points Max)
+  const totalKeywords = matchedKeywords.length + missingKeywords.length;
+  const hardSkillRatio = totalKeywords > 0 ? (matchedKeywords.length / totalKeywords) : 0.65;
+  const hardSkillsScore = Math.round(hardSkillRatio * 40);
+
+  // Pillar 2: Experience Relevance, Seniority & Quantified Impact (30 Points Max)
+  const jdYearsMatch = jobDescription.match(/(\d+)\+?\s*years/i);
+  const requiredYears = jdYearsMatch ? parseInt(jdYearsMatch[1], 10) : 3;
+  const resYearsMatch = resumeText.match(/(\d+)\+?\s*years/i);
+  const candidateYears = resYearsMatch ? parseInt(resYearsMatch[1], 10) : 4;
+  const meetsYears = candidateYears >= requiredYears;
+
+  const metricMatches = resumeText.match(/\b\d+(\.\d+)?%|\$\d+|\b\d{2,}\+?\s*(users|daily|records|defects|minutes|min|latency|cycle|hours|million|billion|k\b)/gi) || [];
   const metricsCount = metricMatches.length;
 
-  let calculatedScore = Math.round(baseRatio * 82);
+  let experienceScore = meetsYears ? 14 : 8;
   if (metricsCount >= 4) {
-    calculatedScore += 8;
+    experienceScore += 15;
   } else if (metricsCount >= 2) {
-    calculatedScore += 4;
+    experienceScore += 10;
+  } else {
+    experienceScore += 4;
   }
 
-  // Length and formatting penalty / bonus
-  if (resumeText.length > 800) calculatedScore += 4;
-  if (missingKeywords.length > 6) calculatedScore -= 6;
+  // Pillar 3: Education, Academic Foundation & Certifications (15 Points Max)
+  let educationScore = 6;
+  if (/b\.?s\.?|bachelor|master|m\.?s\.?|computer science|engineering|degree|ph\.?d|certified|certification/i.test(resumeText)) {
+    educationScore = 14;
+  } else if (/associate|diploma|bootcamp/i.test(resumeText)) {
+    educationScore = 10;
+  }
 
-  // Clamp score strictly between 28 and 96
-  const overall_score = Math.max(28, Math.min(95, calculatedScore));
+  // Pillar 4: ATS Formatting, Readability & Action Verbs (15 Points Max)
+  let formattingScore = 5;
+  const hasSummary = /summary|profile|about/i.test(resumeText);
+  const hasExperience = /experience|work history|employment/i.test(resumeText);
+  const hasEducation = /education|university|college/i.test(resumeText);
+  const hasSkills = /skills|competencies|technologies/i.test(resumeText);
+  const sectionCount = [hasSummary, hasExperience, hasEducation, hasSkills].filter(Boolean).length;
+  formattingScore += (sectionCount * 2); // up to +8
+
+  const actionVerbMatches = resumeText.match(/\b(architected|redesigned|delivered|established|mentored|developed|optimized|implemented|partnered|spearheaded|engineered|built|led|designed)\b/gi) || [];
+  if (actionVerbMatches.length >= 4) {
+    formattingScore += 2;
+  } else if (actionVerbMatches.length >= 2) {
+    formattingScore += 1;
+  }
+
+  // Derived Overall Score (0 - 100)
+  const calculatedTotal = hardSkillsScore + experienceScore + educationScore + formattingScore;
+  const overall_score = Math.max(20, Math.min(96, calculatedTotal));
 
   // 3. Generate Strict Recruiter Actionable Suggestions
   const suggestions: string[] = [];
@@ -179,14 +218,14 @@ function runLocalAtsAnalysis(resumeText: string, jobDescription: string): ATSAna
 }
 
 const ATS_SYSTEM_INSTRUCTION =
-  'You are a strict, rigorous Applicant Tracking System (ATS) recruiter and hiring specialist. Analyze resumes against job descriptions and output structured JSON with accurate match scores and constructive recruiter feedback.';
+  'You are a strict, seasoned corporate recruiter and elite Applicant Tracking System (ATS) algorithm specialist. You evaluate resumes against job descriptions with rigorous corporate hiring standards, uncompromising realistic scoring, and constructive actionable feedback. Never give arbitrary, unearned, or inflated scores. Every deduction and point awarded must be justified by concrete textual evidence from the candidate\'s resume and the job requirements.';
 
 const ATS_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     overall_score: {
       type: Type.INTEGER,
-      description: 'ATS match score from 0 to 100',
+      description: 'Strict ATS match score from 0 to 100 derived from the weighted 4-pillar rubric',
     },
     matched_keywords: {
       type: Type.ARRAY,
@@ -201,30 +240,61 @@ const ATS_RESPONSE_SCHEMA = {
     suggestions: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: '3 to 5 strict, specific, actionable recruiter recommendations',
+      description: '3 to 5 strict, specific, actionable recruiter recommendations citing resume evidence',
     },
   },
   required: ['overall_score', 'matched_keywords', 'missing_keywords', 'suggestions'],
 };
 
 function buildRecruiterPrompt(resumeText: string, jobDescription: string): string {
-  return `You are a strict, seasoned corporate recruiter and Applicant Tracking System (ATS) algorithm specialist.
-Evaluate the candidate's resume text against the provided job description with high standards and realistic corporate ATS scoring.
+  return `You are a strict, senior technical recruiter and ATS algorithm specialist.
+Evaluate the candidate's resume text against the provided job description using high corporate standards and realistic ATS scoring.
 
-CRITICAL INSTRUCTIONS:
-1. "overall_score": An integer from 0 to 100 representing the ATS match percentage.
-   - Under 50: Poor match, critical hard skills or experience missing.
-   - 50 to 75: Moderate match, has foundational skills but missing several key requirements or domain depth.
-   - Above 75: Strong match, aligns well with key requirements, tools, and seniority.
-   Be realistic and strict like a real recruiter; do not give inflated scores.
+==================================================
+STRICT ATS WEIGHTED SCORING RUBRIC (Total: 100 Points)
+==================================================
+You MUST calculate "overall_score" by evaluating and summing the points awarded across the following 4 weighted categories based on concrete textual evidence:
 
-2. "matched_keywords": Array of exact or closely matching skills, technologies, qualifications, methodologies, and requirements found in BOTH the resume and the job description.
-   Provide 6 to 15 concise keyword chips (e.g., "TypeScript", "System Design", "Agile / Scrum", "CI/CD").
+1. HARD SKILLS & KEYWORD ALIGNMENT (40 Points Max):
+   - Compare the candidate's verified technical skills, programming languages, frameworks, cloud platforms, databases, and architectural concepts against the job description requirements.
+   - 35-40: Near-complete alignment with all primary and secondary tools, libraries, and core stack requirements.
+   - 25-34: Strong match on core language/framework, with minor gaps in secondary libraries or specialized tools.
+   - 15-24: Foundational skill overlap exists, but missing multiple critical technical requirements or primary framework competencies.
+   - 0-14: Severe mismatch; missing the core technical stack required for the role.
 
-3. "missing_keywords": Array of important skills, qualifications, certifications, tools, or domain experience explicitly or implicitly demanded in the job description that are NOT found in the resume.
-   Provide 4 to 12 concise keyword chips (e.g., "Kubernetes", "GraphQL", "Performance Profiling", "Team Mentorship").
+2. EXPERIENCE RELEVANCE, SENIORITY & QUANTIFIED IMPACT (30 Points Max):
+   - Compare years of professional experience against the JD seniority requirements (e.g., 5+ years for Senior roles).
+   - Evaluate scope of ownership, architectural leadership, team mentorship, and system scale.
+   - Evaluate quantified impact: presence of concrete metrics, percentages, throughput numbers, latency reductions, user scale, or business ROI in bullet points.
+   - 26-30: Exceeds or meets required seniority, demonstrates clear technical leadership, and consistently substantiates accomplishments with strong quantified impact metrics.
+   - 18-25: Relevant experience and meets years requirement, but lacks leadership scope or has only moderate quantified metrics.
+   - 10-17: Relevant field but junior/mid-level when senior is required, or accomplishments are purely task-oriented without measurable business impact.
+   - 0-9: Irrelevant work history or substantially below the minimum required experience level.
 
-4. "suggestions": An array of 3 to 5 numbered, high-impact, specific, actionable improvements written in the direct, constructive voice of a strict corporate recruiter (e.g., "Quantify your achievements — add concrete metrics and percentages to your bullet points instead of passive task descriptions", "Explicitly integrate missing keywords like [X] into your experience sections where applicable").
+3. EDUCATION, DOMAIN FOUNDATION & CERTIFICATIONS (15 Points Max):
+   - Evaluate academic degree relevance (Computer Science, Software Engineering, STEM, or equivalent proven career trajectory) and verified industry certifications.
+   - 13-15: Direct degree match (e.g., B.S./M.S. in Computer Science/related discipline) and/or recognized domain certifications.
+   - 8-12: Related quantitative degree or substantial proven industry equivalent.
+   - 0-7: Education missing or unrelated without demonstrable compensatory foundational background.
+
+4. ATS FORMATTING, STRUCTURE & ACTION-ORIENTED READABILITY (15 Points Max):
+   - Check standard ATS section headers (Professional Summary, Experience/Employment History, Core Competencies/Skills, Education).
+   - Check reverse-chronological layout, clear role titles, employment date ranges, clean bullet hierarchy.
+   - Check active voice: bullets starting with strong action verbs (e.g., "Architected", "Optimized", "Spearheaded") rather than passive phrasing ("Responsible for", "Assisted with").
+   - 13-15: Pristine ATS-compliant structure, standard section titles, strong action verbs, highly parseable.
+   - 8-12: Clean structure with minor formatting or verb inconsistencies.
+   - 0-7: Non-standard headers, poor chronology, or unparseable blocks of text.
+
+OVERALL SCORE CALCULATION:
+- Sum the scores from the 4 categories: Category 1 (0-40) + Category 2 (0-30) + Category 3 (0-15) + Category 4 (0-15) = overall_score (0-100).
+- Example benchmark: A candidate with 6+ years experience, Computer Science B.S., strong React/Node/Postgres/AWS skill match, high-impact quantified metrics, and clean ATS formatting should score in the ~80-84 range.
+- Do not inflate scores. Ground every point in the candidate's actual textual evidence.
+
+OUTPUT JSON REQUIREMENTS:
+1. "overall_score": Integer from 0 to 100 derived strictly from the rubric above.
+2. "matched_keywords": Array of 6 to 15 concise, high-value skill/technology chips present in both the resume and the job description.
+3. "missing_keywords": Array of 4 to 10 important skills, qualifications, or tools demanded in the job description that are absent or weak in the resume.
+4. "suggestions": Array of 3 to 5 strict, prioritized, actionable recruiter recommendations written in the direct, constructive voice of an executive hiring manager citing specific resume sections.
 
 RESUME TEXT:
 """
@@ -276,8 +346,10 @@ export async function analyzeResume(params: AnalyzeResumeParams): Promise<ATSAna
   const prompt = buildRecruiterPrompt(resumeText, jobDescription);
 
   const modelsToTry = [
-    { model: 'gemini-3.8-flash', retries: 1, delayMs: 500, config: {} },
-    { model: 'gemini-flash-latest', retries: 0, delayMs: 400, config: {} },
+    { model: 'gemini-3.8-flash', retries: 1, delayMs: 400, config: { temperature: 0.2 } },
+    { model: 'gemini-3.6-flash', retries: 1, delayMs: 400, config: { temperature: 0.2 } },
+    { model: 'gemini-flash-latest', retries: 0, delayMs: 300, config: { temperature: 0.2 } },
+    { model: 'gemini-3.1-flash-lite', retries: 0, delayMs: 300, config: { temperature: 0.2 } },
   ];
 
   let responseText = '';

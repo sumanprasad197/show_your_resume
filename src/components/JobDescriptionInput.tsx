@@ -41,7 +41,7 @@ export const JobDescriptionInput: React.FC<JobDescriptionInputProps> = ({
             isDark ? 'text-neutral-200' : 'text-neutral-800'
           }`}
         >
-          Job description
+          Job Description
         </label>
         <div className="flex items-center gap-2">
           {!jobDescription && (

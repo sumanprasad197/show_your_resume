@@ -27,6 +27,7 @@ export default function App() {
   const [uploadedPdf, setUploadedPdf] = useState<UploadedPdfInfo | null>(null);
   const [jobDescription, setJobDescription] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [analysisStage, setAnalysisStage] = useState<number>(0);
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
@@ -83,7 +84,26 @@ export default function App() {
     }
 
     setIsAnalyzing(true);
+    setAnalysisStage(0);
     setResults(null);
+    setApiError(null);
+
+    // Scroll smoothly to loading indicator
+    setTimeout(() => {
+      const loadingEl = document.getElementById('analysis-loading-card');
+      if (loadingEl) {
+        loadingEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+
+    // Paced stage ticker to guide user through all 5 analysis steps
+    let currentStage = 0;
+    const stageTimer = setInterval(() => {
+      currentStage++;
+      if (currentStage <= 4) {
+        setAnalysisStage(currentStage);
+      }
+    }, 700);
 
     try {
       const response = await fetch('/api/analyze', {
@@ -115,6 +135,16 @@ export default function App() {
         throw new Error(data?.error || 'Failed to analyze resume. Please try again.');
       }
 
+      // Ensure the visual progress advances through all 5 steps
+      while (currentStage < 4) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      clearInterval(stageTimer);
+
+      // Transition to Stage 5: all 5 checklist items turn green
+      setAnalysisStage(5);
+      await new Promise((r) => setTimeout(r, 650));
+
       setResults(data);
 
       // Scroll smoothly down to results
@@ -125,12 +155,14 @@ export default function App() {
         }
       }, 150);
     } catch (err: any) {
+      clearInterval(stageTimer);
       console.error('Analysis error:', err);
       setApiError(
         err?.message ||
           'A temporary error occurred while analyzing your resume. Please check your inputs and try again.'
       );
     } finally {
+      clearInterval(stageTimer);
       setIsAnalyzing(false);
     }
   };
@@ -267,7 +299,7 @@ export default function App() {
           {/* Loading State */}
           {isAnalyzing && (
             <div className="py-8">
-              <LoadingState theme={theme} />
+              <LoadingState theme={theme} currentStage={analysisStage} />
             </div>
           )}
 
@@ -308,14 +340,14 @@ export default function App() {
       >
         {/* Left Side: Brand Logo + Subtitle */}
         <div className="flex flex-col lg:flex-row items-center md:items-start lg:items-center gap-1.5 md:gap-1 lg:gap-3 text-center md:text-left">
-          {/* Logo with clean lowercase "show your" and bold uppercase "RESUME" - identical style, animation, and color scheme as header */}
+          {/* Logo with clean lowercase "show your" and bold uppercase "RESUME" plus titanium alpha symbol - aligned through the middle beside E with reduced spacing */}
           <button
             id="footer-brand-logo"
             type="button"
             onClick={handleReset}
             title="Go to Home"
             aria-label="Show Your Resume Home"
-            className="inline-flex items-baseline gap-2 select-none cursor-pointer bg-transparent border-0 p-0 text-left transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded-md"
+            className="inline-flex items-baseline gap-1 sm:gap-1.5 select-none cursor-pointer bg-transparent border-0 p-0 text-left transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded-md"
           >
             <span
               className={`text-sm font-semibold tracking-widest lowercase ${
@@ -324,12 +356,24 @@ export default function App() {
             >
               show your
             </span>
-            <span
-              className={`font-black tracking-wider text-xl leading-none uppercase ${
-                isDark ? 'titanium-dark-silver' : 'titanium-light-silver'
-              }`}
-            >
-              RESUME
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`font-black tracking-wider text-xl leading-none uppercase ${
+                  isDark ? 'titanium-dark-silver' : 'titanium-light-silver'
+                }`}
+              >
+                RESUME
+              </span>
+              <span
+                id="footer-brand-alpha-sign"
+                className={`font-semibold text-xs leading-none select-none lowercase inline-block translate-y-[0.5px] ${
+                  isDark ? 'titanium-dark-deep' : 'titanium-light-deep'
+                }`}
+                title="Alpha"
+                aria-label="Alpha"
+              >
+                α
+              </span>
             </span>
           </button>
 

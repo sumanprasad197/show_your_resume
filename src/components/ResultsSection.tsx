@@ -43,7 +43,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
   );
 
   return (
-    <section id="results-section" className="w-full max-w-5xl mx-auto space-y-8 animate-fadeIn">
+    <section id="results-section" className="w-full max-w-5xl mx-auto space-y-8 animate-fadeIn scroll-mt-24">
       {/* Gauge Hero Glass Panel */}
       <div
         id="match-score-card"

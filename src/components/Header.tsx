@@ -13,10 +13,19 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, currentSte
   const isDark = theme === 'dark';
 
   return (
-    <header className="w-full max-w-5xl mx-auto mb-10 pt-6 px-4">
-      {/* Top Bar: Brand Logo + Theme Toggle */}
-      <div className="flex items-center justify-between gap-4 pb-6 border-b border-neutral-800/40 dark:border-neutral-800/60 light:border-neutral-200">
-        <div className="flex items-center gap-2">
+    <>
+      {/* Sticky Frosted-Glass Header Bar */}
+      <header
+        id="sticky-header-bar"
+        className={`sticky top-0 z-50 w-full transition-colors duration-200 ${
+          isDark ? 'sticky-glass-header-dark' : 'sticky-glass-header-light'
+        }`}
+        style={{
+          WebkitBackdropFilter: 'blur(12px) saturate(160%)',
+          backdropFilter: 'blur(12px) saturate(160%)',
+        }}
+      >
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between gap-4">
           {/* Logo with clean lowercase "show your" (no cursive), bold uppercase "RESUME", and minimal titanium alpha sign aligned with middle strand of E - clickable to return home */}
           <button
             id="brand-logo"
@@ -53,147 +62,149 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, currentSte
               </span>
             </span>
           </button>
+
+          {/* Theme Toggle Button */}
+          <button
+            id="theme-toggle-button"
+            type="button"
+            onClick={onToggleTheme}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 cursor-pointer text-sm font-medium ${
+              isDark
+                ? 'bg-neutral-900/85 hover:bg-neutral-800 border border-neutral-700/70 text-neutral-200 shadow-sm'
+                : 'bg-white/85 hover:bg-white border border-neutral-300 text-neutral-800 shadow-xs'
+            }`}
+          >
+            {isDark ? (
+              <>
+                <Sun className="w-4 h-4 text-neutral-300" />
+                <span className="hidden sm:inline">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-neutral-700" />
+                <span className="hidden sm:inline">Dark</span>
+              </>
+            )}
+          </button>
         </div>
+      </header>
 
-        {/* Theme Toggle Button */}
-        <button
-          id="theme-toggle-button"
-          type="button"
-          onClick={onToggleTheme}
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 cursor-pointer text-sm font-medium ${
-            isDark
-              ? 'bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/70 text-neutral-200 shadow-sm'
-              : 'bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-800 shadow-xs'
-          }`}
-        >
-          {isDark ? (
-            <>
-              <Sun className="w-4 h-4 text-neutral-300" />
-              <span className="hidden sm:inline">Light</span>
-            </>
-          ) : (
-            <>
-              <Moon className="w-4 h-4 text-neutral-700" />
-              <span className="hidden sm:inline">Dark</span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Hero Section between Logo and Upload Zone */}
-      <div className="py-8 sm:py-10 text-center flex flex-col items-center justify-center">
+      {/* Hero Section & 3-Step Strip (Flows directly beneath sticky header) */}
+      <div className="w-full max-w-5xl mx-auto mb-10 pt-4 sm:pt-6 px-4">
         {/* Main Header in bigger format, centered, lowercase, with 'resume' and 'scans it' in identical titanium shimmer effect and underline */}
-        <h2
-          id="hero-header-line"
-          className={`text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem] font-black tracking-tight leading-[1.15] max-w-3xl lowercase ${
-            isDark ? 'text-white' : 'text-neutral-950'
+        <div className="py-6 sm:py-8 text-center flex flex-col items-center justify-center">
+          <h2
+            id="hero-header-line"
+            className={`text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem] font-black tracking-tight leading-[1.15] max-w-3xl lowercase ${
+              isDark ? 'text-white' : 'text-neutral-950'
+            }`}
+          >
+            see your{' '}
+            <span
+              className={`font-black underline underline-offset-8 decoration-2 ${
+                isDark
+                  ? 'titanium-dark-deep decoration-neutral-600'
+                  : 'titanium-light-deep decoration-neutral-400'
+              }`}
+            >
+              resume
+            </span>{' '}
+            the way a recruiter{' '}
+            <span
+              className={`font-black underline underline-offset-8 decoration-2 ${
+                isDark
+                  ? 'titanium-dark-deep decoration-neutral-600'
+                  : 'titanium-light-deep decoration-neutral-400'
+              }`}
+            >
+              scans it.
+            </span>
+          </h2>
+
+          {/* Subheading in gray colors, small text, subheading format */}
+          <p
+            id="hero-subheading"
+            className={`text-sm sm:text-base font-normal max-w-xl mx-auto mt-3 sm:mt-4 leading-relaxed lowercase ${
+              isDark ? 'text-neutral-400' : 'text-neutral-600'
+            }`}
+          >
+            upload your resume at the role you want and get a clear read on what will make it through the first filter.
+          </p>
+        </div>
+
+        {/* 3-Step Strip without numbers */}
+        <div
+          id="steps-strip-container"
+          className={`p-2 rounded-2xl transition-all duration-300 ${
+            isDark ? 'glass-panel-dark' : 'glass-panel-light'
           }`}
         >
-          see your{' '}
-          <span
-            className={`font-black underline underline-offset-8 decoration-2 ${
-              isDark
-                ? 'titanium-dark-deep decoration-neutral-600'
-                : 'titanium-light-deep decoration-neutral-400'
-            }`}
-          >
-            resume
-          </span>{' '}
-          the way a recruiter{' '}
-          <span
-            className={`font-black underline underline-offset-8 decoration-2 ${
-              isDark
-                ? 'titanium-dark-deep decoration-neutral-600'
-                : 'titanium-light-deep decoration-neutral-400'
-            }`}
-          >
-            scans it.
-          </span>
-        </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 text-sm">
+            {/* Step 1: Upload Resume PDF (No numbers) */}
+            <div
+              id="step-1-indicator"
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
+                currentStep === 1
+                  ? isDark
+                    ? 'bg-neutral-800/90 text-white font-medium border border-neutral-600/70 shadow-sm'
+                    : 'bg-white text-neutral-950 font-medium shadow-sm border border-neutral-300/80'
+                  : currentStep > 1
+                  ? isDark
+                    ? 'text-neutral-300 bg-neutral-900/40'
+                    : 'text-neutral-700 bg-neutral-100/60'
+                  : isDark
+                  ? 'text-neutral-500'
+                  : 'text-neutral-400'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-current shrink-0 opacity-70" />
+              <span className="truncate">Upload Resume PDF</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-40 hidden md:block" />
+            </div>
 
-        {/* Subheading in gray colors, small text, subheading format */}
-        <p
-          id="hero-subheading"
-          className={`text-sm sm:text-base font-normal max-w-xl mx-auto mt-3 sm:mt-4 leading-relaxed lowercase ${
-            isDark ? 'text-neutral-400' : 'text-neutral-600'
-          }`}
-        >
-          upload your resume at the role you want and get a clear read on what will make it through the first filter.
-        </p>
-      </div>
+            {/* Step 2: Job description (No numbers, renamed to "Job description") */}
+            <div
+              id="step-2-indicator"
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
+                currentStep === 2
+                  ? isDark
+                    ? 'bg-neutral-800/90 text-white font-medium border border-neutral-600/70 shadow-sm'
+                    : 'bg-white text-neutral-950 font-medium shadow-sm border border-neutral-300/80'
+                  : currentStep > 2
+                  ? isDark
+                    ? 'text-neutral-300 bg-neutral-900/40'
+                    : 'text-neutral-700 bg-neutral-100/60'
+                  : isDark
+                  ? 'text-neutral-500'
+                  : 'text-neutral-400'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-current shrink-0 opacity-70" />
+              <span className="truncate">Job description</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-40 hidden md:block" />
+            </div>
 
-      {/* 3-Step Strip without numbers */}
-      <div
-        id="steps-strip-container"
-        className={`p-2 rounded-2xl transition-all duration-300 ${
-          isDark ? 'glass-panel-dark' : 'glass-panel-light'
-        }`}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 text-sm">
-          {/* Step 1: Upload Resume PDF (No numbers) */}
-          <div
-            id="step-1-indicator"
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
-              currentStep === 1
-                ? isDark
-                  ? 'bg-neutral-800/90 text-white font-medium border border-neutral-600/70 shadow-sm'
-                  : 'bg-white text-neutral-950 font-medium shadow-sm border border-neutral-300/80'
-                : currentStep > 1
-                ? isDark
-                  ? 'text-neutral-300 bg-neutral-900/40'
-                  : 'text-neutral-700 bg-neutral-100/60'
-                : isDark
-                ? 'text-neutral-500'
-                : 'text-neutral-400'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-current shrink-0 opacity-70" />
-            <span className="truncate">Upload Resume PDF</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-40 hidden md:block" />
-          </div>
-
-          {/* Step 2: Job description (No numbers, renamed to "Job description") */}
-          <div
-            id="step-2-indicator"
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
-              currentStep === 2
-                ? isDark
-                  ? 'bg-neutral-800/90 text-white font-medium border border-neutral-600/70 shadow-sm'
-                  : 'bg-white text-neutral-950 font-medium shadow-sm border border-neutral-300/80'
-                : currentStep > 2
-                ? isDark
-                  ? 'text-neutral-300 bg-neutral-900/40'
-                  : 'text-neutral-700 bg-neutral-100/60'
-                : isDark
-                ? 'text-neutral-500'
-                : 'text-neutral-400'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-current shrink-0 opacity-70" />
-            <span className="truncate">Job description</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-40 hidden md:block" />
-          </div>
-
-          {/* Step 3: ATS Analysis (No numbers) */}
-          <div
-            id="step-3-indicator"
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
-              currentStep === 3
-                ? isDark
-                  ? 'bg-neutral-800/90 text-white font-medium border border-neutral-600/70 shadow-sm'
-                  : 'bg-white text-neutral-950 font-medium shadow-sm border border-neutral-300/80'
-                : isDark
-                ? 'text-neutral-500'
-                : 'text-neutral-400'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-current shrink-0 opacity-70" />
-            <span className="truncate">ATS Analysis</span>
-            <Sparkles className="w-3.5 h-3.5 ml-auto opacity-40 hidden md:block" />
+            {/* Step 3: ATS Analysis (No numbers) */}
+            <div
+              id="step-3-indicator"
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
+                currentStep === 3
+                  ? isDark
+                    ? 'bg-neutral-800/90 text-white font-medium border border-neutral-600/70 shadow-sm'
+                    : 'bg-white text-neutral-950 font-medium shadow-sm border border-neutral-300/80'
+                  : isDark
+                  ? 'text-neutral-500'
+                  : 'text-neutral-400'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-current shrink-0 opacity-70" />
+              <span className="truncate">ATS Analysis</span>
+              <Sparkles className="w-3.5 h-3.5 ml-auto opacity-40 hidden md:block" />
+            </div>
           </div>
         </div>
       </div>
-    </header>
+    </>
   );
 };
