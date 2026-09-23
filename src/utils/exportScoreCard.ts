@@ -176,21 +176,21 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   ctx.textAlign = 'left';
 
   // 3. Hero Score Card (The EXACT same design as the website results page!)
-  // x: 50, y: 110, w: 980, h: 355
-  drawRoundedRect(ctx, 50, 110, 980, 355, 26, glassCardBg, glassCardBorder, 1);
+  // x: 50, y: 106, w: 980, h: 374
+  drawRoundedRect(ctx, 50, 106, 980, 374, 26, glassCardBg, glassCardBorder, 1);
 
   // Centered Header Badge Pill inside Hero Card
   const heroBadgeW = 265;
-  const heroBadgeH = 30;
+  const heroBadgeH = 28;
   const heroBadgeX = 540 - heroBadgeW / 2;
-  const heroBadgeY = 128;
+  const heroBadgeY = 122;
   drawRoundedRect(
     ctx,
     heroBadgeX,
     heroBadgeY,
     heroBadgeW,
     heroBadgeH,
-    15,
+    14,
     isDark ? 'rgba(38, 38, 38, 0.6)' : 'rgba(240, 240, 240, 0.8)',
     isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     1
@@ -198,24 +198,25 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   ctx.textAlign = 'center';
   ctx.fillStyle = isDark ? '#d4d4d8' : '#3f3f46';
   ctx.font = '600 11px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.MAIN_BADGE, 540, 147);
+  ctx.fillText(ATS_LABELS.MAIN_BADGE, 540, 140);
 
   // Hero Card Subtitle: "Candidate Match Score"
   ctx.fillStyle = textPrimary;
-  ctx.font = 'bold 23px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.SUBTITLE, 540, 184);
+  ctx.font = 'bold 22px "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.fillText(ATS_LABELS.SUBTITLE, 540, 174);
 
   // Hero Card Description: "Synthesized across critical skill sets, job domain requirements, and recruiter filtering criteria."
   ctx.fillStyle = textMuted;
-  ctx.font = '500 13px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.DESCRIPTION, 540, 206);
+  ctx.font = '500 12.5px "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.fillText(ATS_LABELS.DESCRIPTION, 540, 196);
 
   // ==========================================
   // EXACT SCORE METER DESIGN (from website results page)
+  // With dedicated vertical breathing room preventing any overlap
   // ==========================================
   const gaugeCenterX = 540;
-  const gaugeCenterY = 282;
-  const gaugeRadius = 80;
+  const gaugeCenterY = 308;
+  const gaugeRadius = 70;
   const gaugeLineWidth = 12;
 
   // Background Track Circle
@@ -243,37 +244,39 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   const scoreNumStr = `${score}`;
   const maxScoreStr = ATS_LABELS.MAX_SCORE_LABEL; // "/100"
 
-  ctx.font = '800 46px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.font = '800 44px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
   const scoreWidth = ctx.measureText(scoreNumStr).width;
-  ctx.font = '600 17px "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.font = '600 16px "Plus Jakarta Sans", system-ui, sans-serif';
   const maxScoreWidth = ctx.measureText(maxScoreStr).width;
   const totalScoreBlockW = scoreWidth + 4 + maxScoreWidth;
   const scoreStartX = gaugeCenterX - totalScoreBlockW / 2;
 
-  // Draw Score Number
+  // Draw Score Number (centered vertically with clear room from top arc)
   ctx.textAlign = 'left';
   ctx.fillStyle = tier.color;
-  ctx.font = '800 46px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(scoreNumStr, scoreStartX, gaugeCenterY + 4);
+  ctx.font = '800 44px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.fillText(scoreNumStr, scoreStartX, gaugeCenterY - 4);
 
   // Draw "/100"
   ctx.fillStyle = textMuted;
-  ctx.font = '600 17px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(maxScoreStr, scoreStartX + scoreWidth + 4, gaugeCenterY + 2);
+  ctx.font = '600 16px "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.fillText(maxScoreStr, scoreStartX + scoreWidth + 4, gaugeCenterY - 6);
 
-  // Stacked label 1 (inside gauge): "ATS MATCH SCORE" with ample breathing room from meter arc
+  // Stacked label 1 (inside gauge): "ATS MATCH SCORE" with generous top & bottom padding
+  // Top padding: 12.5px below score baseline
+  // Bottom padding: 30.5px to 48px above gauge bottom lining
   ctx.textAlign = 'center';
   ctx.fillStyle = textSecondary;
-  ctx.font = 'bold 10.5px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.SCORE_GAUGE_LABEL, gaugeCenterX, gaugeCenterY + 24);
+  ctx.font = 'bold 9.5px "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.fillText(ATS_LABELS.SCORE_GAUGE_LABEL, gaugeCenterX, gaugeCenterY + 16);
 
   // Stacked label 2 (below gauge, own row with clear breathing room): Green "STRONG MATCH" pill
-  // Gauge outer radius is 86 (bottom at 282 + 86 = 368).
-  // The badge pill starts at y = 384 (16px breathing room below gauge)
-  const verdictPillW = 170;
+  // Gauge outer radius is 76 (bottom at 308 + 76 = 384).
+  // The badge pill starts at y = 404 (20px breathing room below gauge)
+  const verdictPillW = 168;
   const verdictPillH = 30;
   const verdictPillX = gaugeCenterX - verdictPillW / 2;
-  const verdictPillY = 384;
+  const verdictPillY = 404;
 
   drawRoundedRect(
     ctx,
@@ -302,26 +305,26 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   // Caption line: "High recruiter keyword & qualification alignment"
   ctx.fillStyle = textMuted;
   ctx.font = '500 12px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(tier.sub, gaugeCenterX, 432);
+  ctx.fillText(tier.sub, gaugeCenterX, 456);
 
-  // 4. Weighted Category Breakdown Panel (x: 50, y: 485, w: 980, h: 165)
-  drawRoundedRect(ctx, 50, 485, 980, 165, 24, glassCardBg, glassCardBorder, 1);
+  // 4. Weighted Category Breakdown Panel (x: 50, y: 496, w: 980, h: 160)
+  drawRoundedRect(ctx, 50, 496, 980, 160, 24, glassCardBg, glassCardBorder, 1);
 
   // Title & Subtitle
   ctx.textAlign = 'left';
   ctx.fillStyle = textPrimary;
   ctx.font = 'bold 17px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.BREAKDOWN_TITLE, 75, 513);
+  ctx.fillText(ATS_LABELS.BREAKDOWN_TITLE, 75, 522);
 
   ctx.fillStyle = textMuted;
   ctx.font = '500 11px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.BREAKDOWN_SUBTITLE, 75, 530);
+  ctx.fillText(ATS_LABELS.BREAKDOWN_SUBTITLE, 75, 538);
 
   // Breakdown overall pill tag on top right
   ctx.textAlign = 'right';
   ctx.fillStyle = isDark ? '#d4d4d8' : '#3f3f46';
   ctx.font = '600 12px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(`Overall: ${score}/100`, 1005, 515);
+  ctx.fillText(`Overall: ${score}/100`, 1005, 524);
   ctx.textAlign = 'left';
 
   // 4 Category Bars (2x2 Grid)
@@ -342,7 +345,7 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   for (const item of catGrid) {
     const colX = item.col === 0 ? 75 : 555;
     const itemW = 445;
-    const rowY = item.row === 0 ? 550 : 600;
+    const rowY = item.row === 0 ? 562 : 610;
 
     // Label & Weight
     ctx.fillStyle = textPrimary;
@@ -371,12 +374,12 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
     drawRoundedRect(ctx, colX, barY, fillW, barH, 4, catColor);
   }
 
-  // 5. Two Columns: Matched Skills & Missing Keywords (y: 670, h: 220)
+  // 5. Two Columns: Matched Skills & Missing Keywords (y: 672, h: 218)
   const colW = 475;
-  const colH = 220;
+  const colH = 218;
 
   // Left: Matched Skills (x: 50)
-  drawRoundedRect(ctx, 50, 670, colW, colH, 24, glassCardBg, glassCardBorder, 1);
+  drawRoundedRect(ctx, 50, 672, colW, colH, 24, glassCardBg, glassCardBorder, 1);
   drawRoundedRect(ctx, 70, 688, 32, 32, 10, isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.12)', 'rgba(34, 197, 94, 0.3)');
   ctx.fillStyle = '#22c55e';
   ctx.font = 'bold 15px "Plus Jakarta Sans", system-ui, sans-serif';
@@ -429,7 +432,7 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   }
 
   // Right: Missing Keywords (x: 555)
-  drawRoundedRect(ctx, 555, 670, colW, colH, 24, glassCardBg, glassCardBorder, 1);
+  drawRoundedRect(ctx, 555, 672, colW, colH, 24, glassCardBg, glassCardBorder, 1);
   drawRoundedRect(ctx, 575, 688, 32, 32, 10, isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.12)', 'rgba(239, 68, 68, 0.3)');
   ctx.fillStyle = '#ef4444';
   ctx.font = 'bold 15px "Plus Jakarta Sans", system-ui, sans-serif';
@@ -481,37 +484,37 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
 
       // Text
       ctx.fillStyle = isDark ? '#fca5a5' : '#991b1b';
-      ctx.fillText(skill, missPillX + 19, pillY + 17);
+      ctx.fillText(skill, missPillX + 19, missPillY + 17);
 
       missPillX += pillW + 8;
     }
   }
 
-  // 6. Recruiter's Actionable Suggestions Card (x: 50, y: 910, w: 980, h: 300)
-  drawRoundedRect(ctx, 50, 910, 980, 300, 24, glassCardBg, glassCardBorder, 1);
+  // 6. Recruiter's Actionable Suggestions Card (x: 50, y: 906, w: 980, h: 294)
+  drawRoundedRect(ctx, 50, 906, 980, 294, 24, glassCardBg, glassCardBorder, 1);
 
   // Title with Icon
-  drawRoundedRect(ctx, 75, 926, 32, 32, 10, isDark ? 'rgba(234, 179, 8, 0.15)' : 'rgba(234, 179, 8, 0.12)', 'rgba(234, 179, 8, 0.3)');
+  drawRoundedRect(ctx, 75, 922, 32, 32, 10, isDark ? 'rgba(234, 179, 8, 0.15)' : 'rgba(234, 179, 8, 0.12)', 'rgba(234, 179, 8, 0.3)');
   ctx.fillStyle = '#eab308';
   ctx.font = 'bold 15px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText('★', 85, 947);
+  ctx.fillText('★', 85, 943);
 
   ctx.fillStyle = textPrimary;
   ctx.font = 'bold 17px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.SUGGESTIONS_TITLE, 118, 942);
+  ctx.fillText(ATS_LABELS.SUGGESTIONS_TITLE, 118, 938);
 
   ctx.fillStyle = textMuted;
   ctx.font = '500 11px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.SUGGESTIONS_SUBTITLE, 118, 957);
+  ctx.fillText(ATS_LABELS.SUGGESTIONS_SUBTITLE, 118, 953);
 
   // Suggestions List
-  let sugY = 975;
+  let sugY = 970;
   const topSuggestions = results.suggestions.slice(0, 3);
 
   for (let i = 0; i < topSuggestions.length; i++) {
     const sug = topSuggestions[i];
     // Suggestion box
-    drawRoundedRect(ctx, 75, sugY, 930, 68, 14, isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)', glassCardBorder, 1);
+    drawRoundedRect(ctx, 75, sugY, 930, 66, 14, isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)', glassCardBorder, 1);
 
     // Number circle
     drawRoundedRect(ctx, 92, sugY + 17, 32, 32, 9, isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)');
@@ -524,23 +527,23 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
     // Suggestion text
     ctx.fillStyle = textPrimary;
     ctx.font = '500 12px/1.4 "Plus Jakarta Sans", system-ui, sans-serif';
-    wrapText(ctx, sug, 138, sugY + 28, 850, 18, 2);
+    wrapText(ctx, sug, 138, sugY + 27, 850, 18, 2);
 
-    sugY += 76;
+    sugY += 74;
   }
 
-  // 7. Footer Area (y: 1225 to 1330)
+  // 7. Footer Area (y: 1216 to 1330)
   // Subtle Divider line
   ctx.beginPath();
-  ctx.moveTo(50, 1225);
-  ctx.lineTo(1030, 1225);
+  ctx.moveTo(50, 1216);
+  ctx.lineTo(1030, 1216);
   ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
   ctx.lineWidth = 1;
   ctx.stroke();
 
   // BOTTOM LEFT: Brand Logo "show your RESUME α" with tight, consistent spacing matching site header
   const startX = 55;
-  const logoBaselineY = 1262;
+  const logoBaselineY = 1256;
   const tightGap = 7; // uniform tight spacing between all elements
 
   // 1. "show your"
@@ -579,7 +582,7 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   // Footer Left, row 2: "Resume Analyzer powered by Suman's ATS Match Engine"
   ctx.fillStyle = isDark ? '#71717a' : '#64748b';
   ctx.font = '500 12px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText(ATS_LABELS.FOOTER_ENGINE_CREDIT, startX, 1288);
+  ctx.fillText(ATS_LABELS.FOOTER_ENGINE_CREDIT, startX, 1280);
 
   // Export as PNG Data URL
   const dataUrl = canvas.toDataURL('image/png');
