@@ -1,23 +1,16 @@
 import * as pdfjsLib from 'pdfjs-dist';
+// @ts-ignore - Vite asset URL query import
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Attempt to resolve local Vite-bundled worker, with CDN fallback if required
-try {
-  // @ts-ignore - Vite ?url query import
-  import('pdfjs-dist/build/pdf.worker.min.mjs?url').then((mod) => {
-    if (mod && mod.default) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = mod.default;
-    }
-  }).catch(() => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-  });
-} catch {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+// Set same-origin bundled worker immediately for iOS & Safari security compatibility
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 }
 
 export async function extractTextFromPdf(file: File): Promise<{ text: string; pageCount: number }> {
-  // Ensure workerSrc is set
+  // Fallback if not set
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
   }
 
   const arrayBuffer = await file.arrayBuffer();

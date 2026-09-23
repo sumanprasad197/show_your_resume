@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 export interface ATSAnalysisResult {
   overall_score: number;
@@ -42,18 +42,33 @@ const COMMON_SKILLS_DICTIONARY = [
 
   // Cloud & Infrastructure
   'AWS', 'Amazon Web Services', 'GCP', 'Google Cloud', 'Microsoft Azure', 'Docker',
-  'Kubernetes', 'Terraform', 'CI/CD', 'GitHub Actions', 'Jenkins', 'Linux', 'Serverless',
-  'Cloud Architecture', 'Kafka', 'RabbitMQ',
+  'Kubernetes', 'Terraform', 'CI/CD', 'CI/CD Pipeline', 'GitHub Actions', 'Jenkins', 'Linux',
+  'Serverless', 'Cloud Architecture', 'Cloud Infrastructure', 'Cloud Systems', 'Kafka', 'RabbitMQ',
 
   // Engineering Practices & Concepts
-  'System Design', 'Distributed Systems', 'Performance Optimization', 'High Availability',
-  'Scalability', 'Unit Testing', 'Integration Testing', 'TDD', 'Agile / Scrum', 'Git',
-  'Object-Oriented Design', 'Code Review', 'Clean Architecture', 'API Design',
+  'System Design', 'System Architecture', 'Distributed Systems', 'Performance Optimization',
+  'High Availability', 'Scalability', 'Unit Testing', 'Integration Testing', 'Automated Testing',
+  'TDD', 'Agile / Scrum', 'Git', 'Object-Oriented Design', 'Code Review', 'Clean Architecture',
+  'API Design', 'Database Optimization',
 
   // Soft Skills & Leadership
   'Team Leadership', 'Mentorship', 'Cross-functional Collaboration', 'Stakeholder Management',
   'Technical Roadmapping', 'Problem Solving', 'Communication', 'Project Management'
 ];
+
+const STOP_WORDS = new Set([
+  'The', 'And', 'For', 'With', 'You', 'Our', 'We', 'Are', 'This', 'Will', 'Must', 'Have',
+  'Job', 'Role', 'Company', 'Team', 'Work', 'Years', 'Plus', 'Looking', 'Seeking', 'About',
+  'Apply', 'Equal', 'Opportunity', 'Description', 'Requirements', 'Responsibilities',
+  'Qualifications', 'Preferred', 'Ideal', 'Candidate', 'Strong', 'Good', 'Great', 'Proven',
+  'Track', 'Record', 'Able', 'Ability', 'Working', 'Join', 'Help', 'Build', 'Create', 'Make',
+  'Ensure', 'Provide', 'Support', 'Lead', 'Manage', 'Position', 'Location', 'Remote', 'Hybrid',
+  'Full', 'Part', 'Time', 'Benefits', 'Salary', 'Competitive', 'Bonus', 'Health', 'Dental',
+  'Experience', 'Knowledge', 'Skills', 'Understanding', 'Hands', 'Daily', 'Environment',
+  'Degree', 'Bachelor', 'Master', 'Related', 'Field', 'Equivalent', 'Minimum', 'Maximum',
+  'Status', 'Overview', 'Summary', 'Expectations', 'What', 'How', 'When', 'Where', 'Who',
+  'Senior', 'Junior', 'Software', 'Engineer', 'Developer'
+]);
 
 function runLocalAtsAnalysis(resumeText: string, jobDescription: string): ATSAnalysisResult {
   const resumeLower = resumeText.toLowerCase();
@@ -85,7 +100,7 @@ function runLocalAtsAnalysis(resumeText: string, jobDescription: string): ATSAna
     if (
       word.length > 2 &&
       !demandedSkills.includes(word) &&
-      !['The', 'And', 'For', 'With', 'You', 'Our', 'We', 'Are', 'This', 'Will', 'Must', 'Have', 'Job', 'Role', 'Company', 'Team', 'Work', 'Years', 'Plus'].includes(word)
+      !STOP_WORDS.has(word)
     ) {
       const wLower = word.toLowerCase();
       if (resumeLower.includes(wLower)) {
@@ -261,8 +276,8 @@ export async function analyzeResume(params: AnalyzeResumeParams): Promise<ATSAna
   const prompt = buildRecruiterPrompt(resumeText, jobDescription);
 
   const modelsToTry = [
-    { model: 'gemini-3.8-flash', retries: 2, delayMs: 1200, config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } },
-    { model: 'gemini-3.1-flash-lite', retries: 1, delayMs: 1000, config: {} },
+    { model: 'gemini-3.8-flash', retries: 1, delayMs: 500, config: {} },
+    { model: 'gemini-flash-latest', retries: 0, delayMs: 400, config: {} },
   ];
 
   let responseText = '';
@@ -320,9 +335,9 @@ export async function analyzeResume(params: AnalyzeResumeParams): Promise<ATSAna
     }
   }
 
-  // If external AI service has a transient 503 capacity spike, provide algorithmic analysis
+  // If external AI service has a transient 503 capacity spike, provide algorithmic analysis seamlessly
   if (lastError && !responseText) {
-    console.warn('Gemini service unavailable, engaging high-precision fallback engine:', lastError?.message || lastError);
+    console.log('Notice: Upstream AI capacity limitation detected; serving algorithmic ATS recruiter analysis.');
   }
 
   return runLocalAtsAnalysis(resumeText, jobDescription);

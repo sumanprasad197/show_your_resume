@@ -33,7 +33,12 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
   const processFile = async (file: File) => {
     setErrorMessage(null);
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    const isPdf =
+      file.type === 'application/pdf' ||
+      file.type === 'application/x-pdf' ||
+      file.name.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
       setErrorMessage('Please upload a valid PDF document (.pdf).');
       return;
     }
@@ -93,6 +98,8 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
     if (e.target.files && e.target.files.length > 0) {
       processFile(e.target.files[0]);
     }
+    // Reset value so re-uploading the same file works reliably on iOS/macOS
+    e.target.value = '';
   };
 
   const handleRemove = () => {
@@ -145,9 +152,10 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
         ref={fileInputRef}
         id="resume-file-input"
         type="file"
-        accept=".pdf,application/pdf"
+        accept=".pdf,application/pdf,application/x-pdf"
         onChange={handleFileInputChange}
-        className="hidden"
+        className="sr-only"
+        tabIndex={-1}
       />
 
       {/* Upload Box or Uploaded State */}

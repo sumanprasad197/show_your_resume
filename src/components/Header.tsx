@@ -17,14 +17,14 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, currentSte
       {/* Top Bar: Brand Logo + Theme Toggle */}
       <div className="flex items-center justify-between gap-4 pb-6 border-b border-neutral-800/40 dark:border-neutral-800/60 light:border-neutral-200">
         <div className="flex items-center gap-2">
-          {/* Logo with clean lowercase "show your" (no cursive) and bold uppercase "RESUME" - clickable to return home */}
+          {/* Logo with clean lowercase "show your" (no cursive), bold uppercase "RESUME", and minimal titanium alpha sign aligned with middle strand of E - clickable to return home */}
           <button
             id="brand-logo"
             type="button"
             onClick={onHomeClick}
             title="Go to Home"
             aria-label="Show Your Resume Home"
-            className="flex items-baseline gap-2 select-none cursor-pointer bg-transparent border-0 p-0 text-left transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded-md"
+            className="flex items-baseline gap-1.5 sm:gap-2 select-none cursor-pointer bg-transparent border-0 p-0 text-left transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded-md"
           >
             <span
               className={`text-sm sm:text-base font-semibold tracking-widest lowercase ${
@@ -33,12 +33,24 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, currentSte
             >
               show your
             </span>
-            <span
-              className={`font-black tracking-wider text-xl sm:text-2xl leading-none uppercase ${
-                isDark ? 'titanium-dark-silver' : 'titanium-light-silver'
-              }`}
-            >
-              RESUME
+            <span className="inline-flex items-center gap-1.5 sm:gap-2">
+              <span
+                className={`font-black tracking-wider text-xl sm:text-2xl leading-none uppercase ${
+                  isDark ? 'titanium-dark-silver' : 'titanium-light-silver'
+                }`}
+              >
+                RESUME
+              </span>
+              <span
+                id="brand-alpha-sign"
+                className={`font-semibold text-xs sm:text-sm leading-none select-none lowercase inline-block -translate-y-0.5 ${
+                  isDark ? 'titanium-dark-deep' : 'titanium-light-deep'
+                }`}
+                title="Alpha"
+                aria-label="Alpha"
+              >
+                α
+              </span>
             </span>
           </button>
         </div>
@@ -71,14 +83,24 @@ export const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme, currentSte
 
       {/* Hero Section between Logo and Upload Zone */}
       <div className="py-8 sm:py-10 text-center flex flex-col items-center justify-center">
-        {/* Main Header in bigger format, centered, lowercase, with 'scans it' in single matching color */}
+        {/* Main Header in bigger format, centered, lowercase, with 'resume' and 'scans it' in identical titanium shimmer effect and underline */}
         <h2
           id="hero-header-line"
           className={`text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem] font-black tracking-tight leading-[1.15] max-w-3xl lowercase ${
             isDark ? 'text-white' : 'text-neutral-950'
           }`}
         >
-          see your resume the way a recruiter{' '}
+          see your{' '}
+          <span
+            className={`font-black underline underline-offset-8 decoration-2 ${
+              isDark
+                ? 'titanium-dark-deep decoration-neutral-600'
+                : 'titanium-light-deep decoration-neutral-400'
+            }`}
+          >
+            resume
+          </span>{' '}
+          the way a recruiter{' '}
           <span
             className={`font-black underline underline-offset-8 decoration-2 ${
               isDark
