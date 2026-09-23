@@ -8,11 +8,11 @@ interface LoadingStateProps {
 }
 
 const STAGES = [
-  'Reading your resume...',
-  'Extracting core competencies and technical skills...',
-  'Cross-referencing requirements against job description...',
-  'Evaluating recruiter ATS thresholds and scoring...',
-  'Formulating actionable recruiter suggestions...',
+  'Parsing resume qualifications & career history...',
+  'Parsing job description & filtering noise...',
+  'Matching core competencies & requirements...',
+  'Computing deterministic weighted ATS score...',
+  'Writing recruiter suggestions & narrative verdict...',
 ];
 
 export const LoadingState: React.FC<LoadingStateProps> = ({ theme, currentStage = 0 }) => {
@@ -64,7 +64,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({ theme, currentStage 
         >
           {isAllComplete
             ? 'All 5 strict recruiter ATS evaluation stages passed. Finalizing metrics report...'
-            : 'Our strict ATS recruiter AI is parsing your qualifications, matching key requirements, and auditing gaps.'}
+            : 'Our multi-stage pipeline is parsing qualifications, running noise-filtered matching, and calculating deterministic weighted scores.'}
         </p>
 
         {/* Progress Stages Checklist */}

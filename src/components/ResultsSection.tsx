@@ -1,7 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CircularGauge } from './CircularGauge';
 import { AnalysisResult, ThemeMode } from '../types';
-import { CheckCircle, AlertTriangle, Lightbulb, RotateCcw, Copy, Check, Filter } from 'lucide-react';
+import {
+  CheckCircle,
+  AlertTriangle,
+  Lightbulb,
+  RotateCcw,
+  Copy,
+  Check,
+  Filter,
+  Download,
+  Loader2,
+  X,
+  ExternalLink,
+  Layers,
+  Briefcase,
+  GraduationCap,
+  FileCheck,
+  Eye,
+} from 'lucide-react';
+import { downloadScoreCardImage, generateScoreCardCanvas } from '../utils/exportScoreCard';
+import { ATS_LABELS, CATEGORY_DEFINITIONS } from '../constants/atsConstants';
 
 interface ResultsSectionProps {
   results: AnalysisResult;
@@ -18,6 +37,22 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
   const [copiedKeyword, setCopiedKeyword] = useState<string | null>(null);
   const [resolvedSuggestions, setResolvedSuggestions] = useState<Record<number, boolean>>({});
   const [searchFilter, setSearchFilter] = useState<string>('');
+
+  // Export Score Card State
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportSuccess, setExportSuccess] = useState<boolean>(false);
+  const [previewModalDataUrl, setPreviewModalDataUrl] = useState<string | null>(null);
+
+  // Lock background scroll when preview modal is open
+  useEffect(() => {
+    if (previewModalDataUrl) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [previewModalDataUrl]);
 
   const handleCopy = (keyword: string) => {
     navigator.clipboard.writeText(keyword);
@@ -42,6 +77,64 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
     kw.toLowerCase().includes(searchFilter.toLowerCase().trim())
   );
 
+  // Default breakdown fallback if legacy result
+  const breakdown = results.breakdown || {
+    skills: Math.round(results.overall_score * 0.9),
+    experience: Math.round(results.overall_score * 0.95),
+    education: 90,
+    formatting: 95,
+  };
+
+  const handlePreviewCard = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const res = await generateScoreCardCanvas({ results, theme });
+      setPreviewModalDataUrl(res.dataUrl);
+    } catch (err) {
+      console.error('Failed to generate preview:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleSaveResults = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    setExportSuccess(false);
+
+    try {
+      const res = await downloadScoreCardImage({
+        results,
+        theme,
+      });
+
+      if (res.isIos) {
+        setPreviewModalDataUrl(res.dataUrl);
+      } else {
+        setExportSuccess(true);
+        setTimeout(() => setExportSuccess(false), 2500);
+      }
+    } catch (err) {
+      console.error('Failed to export score card:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const categoryIcons: Record<string, typeof Layers> = {
+    skills: Layers,
+    experience: Briefcase,
+    education: GraduationCap,
+    formatting: FileCheck,
+  };
+
+  const breakdownItems = CATEGORY_DEFINITIONS.map((cat) => ({
+    ...cat,
+    score: breakdown[cat.id as keyof typeof breakdown] || 80,
+    icon: categoryIcons[cat.id] || Layers,
+  }));
+
   return (
     <section id="results-section" className="w-full max-w-5xl mx-auto space-y-8 animate-fadeIn scroll-mt-24">
       {/* Gauge Hero Glass Panel */}
@@ -63,25 +156,172 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
         />
 
         <div className="max-w-xl mx-auto relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-2 border border-neutral-700/40 bg-neutral-800/40 text-neutral-300">
-            <span>ATS Compatibility Analysis</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wider mb-2 border border-neutral-700/40 bg-neutral-800/40 text-neutral-300">
+            <span>{ATS_LABELS.MAIN_BADGE}</span>
           </div>
           <h2
             className={`text-xl sm:text-2xl font-bold tracking-tight mb-1 ${
               isDark ? 'text-white' : 'text-neutral-950'
             }`}
           >
-            Candidate Match Score
+            {ATS_LABELS.SUBTITLE}
           </h2>
           <p
             className={`text-xs sm:text-sm mb-6 ${
               isDark ? 'text-neutral-400' : 'text-neutral-600'
             }`}
           >
-            Synthesized across critical skill overlaps, role domain requirements, and recruiter filtering criteria.
+            {ATS_LABELS.DESCRIPTION}
           </p>
 
           <CircularGauge score={results.overall_score} theme={theme} />
+
+          {/* Save & Preview Results Pill Buttons (Below Score Gauge) */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              id="save-results-button"
+              type="button"
+              onClick={handleSaveResults}
+              disabled={isExporting}
+              title="Download high-resolution score card PNG"
+              aria-label="Save Results as PNG Image"
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer shadow-sm active:scale-95 border ${
+                isDark
+                  ? 'bg-neutral-900/80 hover:bg-neutral-800/90 text-neutral-200 border-neutral-700/70 hover:border-neutral-500 shadow-black/40'
+                  : 'bg-white/90 hover:bg-white text-neutral-800 border-neutral-300 hover:border-neutral-400 shadow-neutral-200'
+              }`}
+              style={{
+                WebkitBackdropFilter: 'blur(10px) saturate(160%)',
+                backdropFilter: 'blur(10px) saturate(160%)',
+              }}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
+                  <span>Generating Score Card...</span>
+                </>
+              ) : exportSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-500" />
+                  <span>Score Card Saved</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 text-neutral-400" />
+                  <span>Save Results</span>
+                </>
+              )}
+            </button>
+
+            <button
+              id="preview-card-button"
+              type="button"
+              onClick={handlePreviewCard}
+              disabled={isExporting}
+              title="Preview exported score card image"
+              aria-label="Preview Score Card Image"
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer shadow-sm active:scale-95 border ${
+                isDark
+                  ? 'bg-neutral-900/60 hover:bg-neutral-800/80 text-neutral-300 border-neutral-700/50 hover:border-neutral-500'
+                  : 'bg-neutral-100/80 hover:bg-neutral-200/80 text-neutral-700 border-neutral-300 hover:border-neutral-400'
+              }`}
+              style={{
+                WebkitBackdropFilter: 'blur(10px) saturate(160%)',
+                backdropFilter: 'blur(10px) saturate(160%)',
+              }}
+            >
+              <Eye className="w-4 h-4 text-neutral-400" />
+              <span>Preview Card</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Breakdown Panel */}
+      <div
+        id="category-breakdown-card"
+        className={`p-6 sm:p-7 rounded-3xl transition-all duration-300 ${
+          isDark ? 'glass-panel-dark' : 'glass-panel-light'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-5 border-b border-neutral-800/40 dark:border-neutral-800/60 light:border-neutral-200">
+          <div>
+            <h3
+              className={`text-base sm:text-lg font-bold tracking-tight ${
+                isDark ? 'text-white' : 'text-neutral-950'
+              }`}
+            >
+              {ATS_LABELS.BREAKDOWN_TITLE}
+            </h3>
+            <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+              {ATS_LABELS.BREAKDOWN_SUBTITLE}
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium self-start sm:self-auto border border-neutral-700/50 bg-neutral-800/50 text-neutral-300">
+            <span>Overall: {results.overall_score}/100</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {breakdownItems.map((item) => {
+            const Icon = item.icon;
+            const scoreColor =
+              item.score >= 80 ? 'text-emerald-500' : item.score >= 60 ? 'text-amber-500' : 'text-rose-500';
+            const barFill =
+              item.score >= 80 ? 'bg-emerald-500' : item.score >= 60 ? 'bg-amber-500' : 'bg-rose-500';
+
+            return (
+              <div
+                key={item.id}
+                className={`p-4 rounded-2xl border transition-all ${
+                  isDark
+                    ? 'bg-neutral-900/40 border-neutral-800/80 hover:border-neutral-700/80'
+                    : 'bg-white/60 border-neutral-200 hover:border-neutral-300'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                        isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-100 text-neutral-700'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <h4
+                        className={`text-xs sm:text-sm font-semibold tracking-tight ${
+                          isDark ? 'text-neutral-200' : 'text-neutral-800'
+                        }`}
+                      >
+                        {item.title}
+                      </h4>
+                      <span className="text-[11px] text-neutral-500 font-medium">{item.weight}</span>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-bold font-mono ${scoreColor}`}>
+                    {item.score}%
+                  </span>
+                </div>
+
+                {/* Progress Bar Track */}
+                <div
+                  className={`w-full h-2 rounded-full overflow-hidden mb-2 ${
+                    isDark ? 'bg-neutral-800' : 'bg-neutral-200'
+                  }`}
+                >
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${barFill}`}
+                    style={{ width: `${Math.max(4, Math.min(100, item.score))}%` }}
+                  />
+                </div>
+
+                <p className="text-[11px] text-neutral-500 leading-tight">
+                  {item.description}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -134,14 +374,14 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
                     isDark ? 'text-white' : 'text-neutral-950'
                   }`}
                 >
-                  Matched Skills
+                  {ATS_LABELS.MATCHED_SKILLS_TITLE}
                 </h3>
                 <p
                   className={`text-xs ${
                     isDark ? 'text-neutral-400' : 'text-neutral-600'
                   }`}
                 >
-                  Found in both your resume & job description
+                  {ATS_LABELS.MATCHED_SKILLS_SUBTITLE}
                 </p>
               </div>
             </div>
@@ -189,7 +429,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
             >
               {searchFilter
                 ? 'No matching skills found in filter.'
-                : 'No direct matching keywords detected. Check the job description and resume formatting.'}
+                : 'No direct matching keywords detected.'}
             </p>
           )}
         </div>
@@ -218,14 +458,14 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
                     isDark ? 'text-white' : 'text-neutral-950'
                   }`}
                 >
-                  Missing Keywords
+                  {ATS_LABELS.MISSING_KEYWORDS_TITLE}
                 </h3>
                 <p
                   className={`text-xs ${
                     isDark ? 'text-neutral-400' : 'text-neutral-600'
                   }`}
                 >
-                  Demanded in job description but missing in resume
+                  {ATS_LABELS.MISSING_KEYWORDS_SUBTITLE}
                 </p>
               </div>
             </div>
@@ -299,14 +539,14 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
                   isDark ? 'text-white' : 'text-neutral-950'
                 }`}
               >
-                Recruiter's Actionable Suggestions
+                {ATS_LABELS.SUGGESTIONS_TITLE}
               </h3>
               <p
                 className={`text-xs ${
                   isDark ? 'text-neutral-400' : 'text-neutral-600'
                 }`}
               >
-                High-impact edits to pass initial screening algorithms
+                {ATS_LABELS.SUGGESTIONS_SUBTITLE}
               </p>
             </div>
           </div>
@@ -396,6 +636,101 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
           <span>Analyze another resume</span>
         </button>
       </div>
+
+      {/* Score Card Preview & iOS Fallback Modal */}
+      {previewModalDataUrl && (
+        <div
+          id="scorecard-preview-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewModalDataUrl(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn"
+          style={{
+            WebkitBackdropFilter: 'blur(8px)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div
+            className={`w-full max-w-lg rounded-3xl border shadow-2xl relative flex flex-col max-h-[88vh] overflow-hidden ${
+              isDark ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header (Fixed, never scrolls) */}
+            <div
+              className={`p-5 sm:p-6 pb-3.5 shrink-0 relative border-b ${
+                isDark ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-200 bg-white'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewModalDataUrl(null)}
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-neutral-800/20 cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h3 className="text-lg font-bold mb-1 pr-8">ATS Compatibility Score Card Preview</h3>
+              <p className="text-xs text-neutral-400">
+                Rendered at 1080×1350 with frosted glass aesthetic matching the website.
+              </p>
+            </div>
+
+            {/* Scrollable Content Body (Isolated scroll container) */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 overscroll-contain bg-neutral-950/20 flex flex-col items-center">
+              <div className="w-full flex items-center justify-center rounded-2xl border border-neutral-700/40 bg-black/40 p-2 shadow-inner">
+                <img
+                  src={previewModalDataUrl}
+                  alt="ATS Score Card Preview"
+                  className="max-w-full h-auto max-h-[56vh] object-contain rounded-xl shadow-lg"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer (Fixed, solid background, never overlaps) */}
+            <div
+              className={`p-4 sm:px-6 shrink-0 border-t ${
+                isDark ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-200 bg-neutral-50'
+              } flex items-center justify-between gap-2.5 z-10`}
+            >
+              <a
+                href={previewModalDataUrl}
+                download={`resume-ats-scorecard-${Date.now()}.png`}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-black cursor-pointer transition-colors shadow-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download PNG</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  window.open(previewModalDataUrl, '_blank');
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold border cursor-pointer transition-colors ${
+                  isDark
+                    ? 'bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-600'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-neutral-300'
+                }`}
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Open in Tab</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewModalDataUrl(null)}
+                className={`py-2.5 px-4 rounded-xl text-xs font-semibold border cursor-pointer transition-colors ${
+                  isDark
+                    ? 'bg-neutral-800/60 hover:bg-neutral-800 text-neutral-300 border-neutral-700'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+                }`}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

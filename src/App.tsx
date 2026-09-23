@@ -96,27 +96,16 @@ export default function App() {
       }
     }, 100);
 
-    // Paced stage ticker to guide user through all 5 analysis steps
-    let currentStage = 0;
-    const stageTimer = setInterval(() => {
-      currentStage++;
-      if (currentStage <= 4) {
-        setAnalysisStage(currentStage);
-      }
-    }, 700);
-
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          resumeText: uploadedPdf.text,
-          jobDescription: trimmedJob,
-        }),
-      });
-
+    const apiPromise = fetch('/api/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        resumeText: uploadedPdf.text,
+        jobDescription: trimmedJob,
+      }),
+    }).then(async (response) => {
       const contentType = response.headers.get('content-type') || '';
       let data: any;
 
@@ -135,13 +124,35 @@ export default function App() {
         throw new Error(data?.error || 'Failed to analyze resume. Please try again.');
       }
 
-      // Ensure the visual progress advances through all 5 steps
-      while (currentStage < 4) {
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      clearInterval(stageTimer);
+      return data;
+    });
 
-      // Transition to Stage 5: all 5 checklist items turn green
+    try {
+      // Step 1: Parsing resume qualifications & career history
+      await new Promise((r) => setTimeout(r, 700));
+
+      // Step 2: Parsing job description & filtering noise
+      setAnalysisStage(1);
+      await new Promise((r) => setTimeout(r, 750));
+
+      // Step 3: Matching core competencies & requirements
+      setAnalysisStage(2);
+      await new Promise((r) => setTimeout(r, 750));
+
+      // Step 4: Computing deterministic weighted ATS score
+      setAnalysisStage(3);
+      await new Promise((r) => setTimeout(r, 700));
+
+      // Step 5: Writing recruiter suggestions & narrative verdict
+      setAnalysisStage(4);
+
+      // Await data from API (if still executing)
+      const data = await apiPromise;
+
+      // Allow user to see Step 5 active
+      await new Promise((r) => setTimeout(r, 750));
+
+      // Transition to All 5 Completed (all checkmarks green)
       setAnalysisStage(5);
       await new Promise((r) => setTimeout(r, 650));
 
@@ -155,14 +166,12 @@ export default function App() {
         }
       }, 150);
     } catch (err: any) {
-      clearInterval(stageTimer);
       console.error('Analysis error:', err);
       setApiError(
         err?.message ||
           'A temporary error occurred while analyzing your resume. Please check your inputs and try again.'
       );
     } finally {
-      clearInterval(stageTimer);
       setIsAnalyzing(false);
     }
   };
