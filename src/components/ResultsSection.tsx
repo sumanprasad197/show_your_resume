@@ -147,6 +147,28 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
 
   return (
     <section id="results-section" className="w-full max-w-5xl mx-auto space-y-8 animate-fadeIn scroll-mt-24">
+      {/* Heuristic / Fallback Engine Notice Banner */}
+      {results.mode === 'heuristic' && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl flex items-center gap-3 border shadow-sm transition-all duration-200 ${
+            isDark
+              ? 'bg-amber-950/40 border-amber-500/40 text-amber-200 shadow-amber-950/20'
+              : 'bg-amber-50 border-amber-300 text-amber-900 shadow-amber-100'
+          }`}
+        >
+          <AlertTriangle
+            className={`w-5 h-5 shrink-0 ${
+              isDark ? 'text-amber-400' : 'text-amber-600'
+            }`}
+          />
+          <div className="flex-1 text-xs sm:text-sm font-medium">
+            AI analysis temporarily unavailable — showing estimated results
+          </div>
+        </div>
+      )}
+
       {/* Gauge Hero Glass Panel */}
       <div
         id="match-score-card"

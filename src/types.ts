@@ -11,6 +11,7 @@ export interface AnalysisResult {
   missing_keywords: string[];
   suggestions: string[];
   breakdown?: CategoryBreakdown;
+  mode?: 'ai' | 'heuristic';
 }
 
 export type ThemeMode = 'dark' | 'light';

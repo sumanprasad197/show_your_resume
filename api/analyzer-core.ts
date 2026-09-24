@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import crypto from 'crypto';
 
 export interface CategoryBreakdown {
   skills: number; // 0 - 100 (45% weight)
@@ -13,6 +14,7 @@ export interface ATSAnalysisResult {
   missing_keywords: string[];
   suggestions: string[];
   breakdown: CategoryBreakdown;
+  mode?: 'ai' | 'heuristic';
 }
 
 export interface AnalyzeResumeParams {
@@ -52,6 +54,14 @@ interface JobDescriptionExtraction {
   nice_to_have: string[];
   min_years: number;
   education_required: string[];
+}
+
+// In-memory extraction caches keyed by SHA-256 hash of document text
+export const resumeExtractionCache = new Map<string, ResumeExtraction>();
+export const jobExtractionCache = new Map<string, JobDescriptionExtraction>();
+
+export function hashText(text: string): string {
+  return crypto.createHash('sha256').update(text.trim()).digest('hex');
 }
 
 const RESUME_EXTRACTION_SCHEMA = {
@@ -592,12 +602,79 @@ export async function analyzeResume(params: AnalyzeResumeParams): Promise<ATSAna
     },
   });
 
-  const models = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+  // Model configurations:
+  // 1. Extraction stages (Resume & Job parsing): Strong models ONLY (gemini-3.8-flash, gemini-flash-latest).
+  //    No silent downgrade to lite models. If strong models are unavailable/rate-limited, return a clean user error.
+  const extractionModels = ['gemini-3.8-flash', 'gemini-flash-latest'];
+
+  // 2. Verdict/suggestions stage: Generates actionable advice from pre-computed scores without affecting scoring.
+  //    Can safely use fastest models including lite.
+  const verdictModels = ['gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+
+  // Helper: Call Gemini model with strict timeout, fallback, and timing logs
+  async function callGeminiWithTimeoutAndFallback<T>(
+    stageName: string,
+    modelList: string[],
+    prompt: string,
+    schema: any,
+    timeoutMs: number = 8000
+  ): Promise<{ data: T | null; modelServed: string; durationMs: number }> {
+    for (const model of modelList) {
+      const startTime = Date.now();
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, timeoutMs);
+
+      try {
+        console.log(`[ATS Timing] [${stageName}] Attempting model: ${model} (timeout: ${timeoutMs}ms)`);
+        const res = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            temperature: 0.2,
+            responseMimeType: 'application/json',
+            responseSchema: schema,
+            abortSignal: abortController.signal,
+          },
+        });
+        clearTimeout(timeoutId);
+        const durationMs = Date.now() - startTime;
+
+        if (res?.text) {
+          const parsed = JSON.parse(res.text.trim());
+          console.log(`[ATS Timing] [${stageName}] SUCCESS with model: ${model} in ${durationMs}ms`);
+          return { data: parsed, modelServed: model, durationMs };
+        }
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        const durationMs = Date.now() - startTime;
+        const isTimeout = abortController.signal.aborted || err?.name === 'AbortError' || err?.message?.includes('aborted');
+        const isRateLimit = err?.status === 'RESOURCE_EXHAUSTED' || err?.message?.includes('429') || err?.message?.includes('Quota exceeded');
+        const isUnavailable = err?.status === 'UNAVAILABLE' || err?.message?.includes('503');
+
+        console.warn(
+          `[ATS Timing] [${stageName}] FAILED/TIMED OUT on model: ${model} after ${durationMs}ms ${
+            isTimeout
+              ? '(EXCEEDED 8s TIMEOUT - FALLING BACK)'
+              : isRateLimit
+              ? '(429 RATE LIMIT / QUOTA EXCEEDED - FALLING BACK)'
+              : isUnavailable
+              ? '(503 TEMPORARILY UNAVAILABLE - FALLING BACK)'
+              : `(${err?.message || 'Error'})`
+          }`
+        );
+      }
+    }
+    console.error(`[ATS Timing] [${stageName}] All strong extraction models exhausted`);
+    return { data: null, modelServed: 'none (exhausted)', durationMs: 0 };
+  }
 
   // -----------------------------------------------------------------------
   // STAGE 1 — EXTRACTION: Two Gemini calls (temperature 0.2)
   // Call 1: Resume extraction
   // Call 2: Job Description extraction with strict NOISE FILTER
+  // Run in PARALLEL via Promise.all
   // -----------------------------------------------------------------------
 
   let extractedResume: ResumeExtraction | null = null;
@@ -643,75 +720,85 @@ JOB DESCRIPTION:
 ${jobDescription.slice(0, 10000)}
 """`;
 
-  // Run Stage 1 extraction in parallel for fast performance
-  try {
-    const [resumeResult, jobResult] = await Promise.all([
-      (async () => {
-        for (const model of models) {
-          try {
-            const res = await ai.models.generateContent({
-              model,
-              contents: resumeExtractionPrompt,
-              config: {
-                temperature: 0.2,
-                responseMimeType: 'application/json',
-                responseSchema: RESUME_EXTRACTION_SCHEMA,
-              },
-            });
-            if (res?.text) return JSON.parse(res.text.trim());
-          } catch {
-            // try next model
-          }
-        }
-        return null;
-      })(),
-      (async () => {
-        for (const model of models) {
-          try {
-            const res = await ai.models.generateContent({
-              model,
-              contents: jobExtractionPrompt,
-              config: {
-                temperature: 0.2,
-                responseMimeType: 'application/json',
-                responseSchema: JOB_EXTRACTION_SCHEMA,
-              },
-            });
-            if (res?.text) return JSON.parse(res.text.trim());
-          } catch {
-            // try next model
-          }
-        }
-        return null;
-      })(),
-    ]);
+  // Run Stage 1 extraction in parallel (Promise.all) for fast performance
+  const stage1Start = Date.now();
+  console.log(`[ATS Timing] Starting Stage 1 Extractions (Parallel: Resume + Job Description)...`);
 
-    extractedResume = resumeResult;
-    extractedJob = jobResult;
+  const resumeHash = hashText(resumeText);
+  const jobHash = hashText(jobDescription);
+
+  const cachedResume = resumeExtractionCache.get(resumeHash);
+  const cachedJob = jobExtractionCache.get(jobHash);
+
+  let resumeCallPromise: Promise<{ data: ResumeExtraction | null; modelServed: string; durationMs: number }>;
+  let jobCallPromise: Promise<{ data: JobDescriptionExtraction | null; modelServed: string; durationMs: number }>;
+
+  if (cachedResume) {
+    console.log(`[ATS Timing] [Resume Extraction] CACHE HIT (Hash: ${resumeHash.slice(0, 10)}...) — Reusing cached extraction`);
+    resumeCallPromise = Promise.resolve({
+      data: cachedResume,
+      modelServed: 'cache (in-memory hash)',
+      durationMs: 0,
+    });
+  } else {
+    console.log(`[ATS Timing] [Resume Extraction] CACHE MISS — Calling strong model waterfall`);
+    resumeCallPromise = callGeminiWithTimeoutAndFallback<ResumeExtraction>(
+      'Resume Extraction',
+      extractionModels,
+      resumeExtractionPrompt,
+      RESUME_EXTRACTION_SCHEMA,
+      8000
+    );
+  }
+
+  if (cachedJob) {
+    console.log(`[ATS Timing] [Job Extraction] CACHE HIT (Hash: ${jobHash.slice(0, 10)}...) — Reusing cached extraction`);
+    jobCallPromise = Promise.resolve({
+      data: cachedJob,
+      modelServed: 'cache (in-memory hash)',
+      durationMs: 0,
+    });
+  } else {
+    console.log(`[ATS Timing] [Job Extraction] CACHE MISS — Calling strong model waterfall`);
+    jobCallPromise = callGeminiWithTimeoutAndFallback<JobDescriptionExtraction>(
+      'Job Extraction',
+      extractionModels,
+      jobExtractionPrompt,
+      JOB_EXTRACTION_SCHEMA,
+      8000
+    );
+  }
+
+  try {
+    const [resumeCallResult, jobCallResult] = await Promise.all([resumeCallPromise, jobCallPromise]);
+
+    extractedResume = resumeCallResult.data;
+    extractedJob = jobCallResult.data;
+
+    // Cache successful extractions
+    if (extractedResume && !cachedResume) {
+      resumeExtractionCache.set(resumeHash, extractedResume);
+    }
+    if (extractedJob && !cachedJob) {
+      jobExtractionCache.set(jobHash, extractedJob);
+    }
+
+    console.log(
+      `[ATS Timing] Stage 1 Parallel Extraction completed in ${Date.now() - stage1Start}ms (Resume served by: ${
+        resumeCallResult.modelServed
+      }, Job served by: ${jobCallResult.modelServed})`
+    );
   } catch (err) {
     console.error('Extraction error:', err);
   }
 
-  // Fallback extraction if models were temporarily unavailable
-  if (!extractedResume) {
-    const skillsFound = resumeText.match(/\b(TypeScript|JavaScript|React|Node\.?js|Python|Java|SQL|PostgreSQL|Redis|AWS|Docker|Kubernetes|Git|CI\/CD|Tailwind CSS|GraphQL|REST)\b/gi) || [];
-    extractedResume = {
-      skills: Array.from(new Set(skillsFound)),
-      experience: [{ role: 'Software Engineer', highlights: [resumeText.slice(0, 500)] }],
-      total_years_experience: 5,
-      education: ['Computer Science'],
-      certifications: [],
-    };
-  }
-
-  if (!extractedJob) {
-    const jdSkills = jobDescription.match(/\b(TypeScript|JavaScript|React|Node\.?js|Python|Java|SQL|PostgreSQL|Redis|AWS|Docker|Kubernetes|Git|CI\/CD|Tailwind CSS|GraphQL|REST)\b/gi) || [];
-    extractedJob = {
-      must_have_skills: Array.from(new Set(jdSkills)),
-      nice_to_have: [],
-      min_years: 4,
-      education_required: [],
-    };
+  // NO SILENT DOWNGRADE FOR EXTRACTION:
+  // If strong models were rate-limited or unavailable, throw a clean, friendly error. Never serve a degraded score.
+  if (!extractedResume || !extractedJob) {
+    throw new AnalyzerError(
+      'Analysis capacity is limited right now, please try again in a minute',
+      429
+    );
   }
 
   // -----------------------------------------------------------------------
@@ -739,41 +826,38 @@ ${jobDescription.slice(0, 10000)}
       matchResults.missingKeywords
     );
 
-    for (const model of models) {
-      try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: verdictPrompt,
-          config: {
-            temperature: 0.2,
-            responseMimeType: 'application/json',
-            responseSchema: VERDICT_SCHEMA,
-          },
-        });
-        if (res?.text) {
-          const parsed = JSON.parse(res.text.trim());
-          if (Array.isArray(parsed?.suggestions) && parsed.suggestions.length > 0) {
-            suggestions = parsed.suggestions;
-            break;
-          }
-        }
-      } catch {
-        // try next model
-      }
+    const verdictResult = await callGeminiWithTimeoutAndFallback<{ suggestions: string[] }>(
+      'Recruiter Suggestions Verdict',
+      verdictModels,
+      verdictPrompt,
+      VERDICT_SCHEMA,
+      8000
+    );
+
+    if (Array.isArray(verdictResult.data?.suggestions) && verdictResult.data.suggestions.length > 0) {
+      suggestions = verdictResult.data.suggestions;
     }
   } catch (err) {
     console.error('Verdict generation error:', err);
   }
 
+  let isHeuristicMode = false;
   if (!suggestions || suggestions.length === 0) {
+    isHeuristicMode = true;
     suggestions = generateDeterministicSuggestions(overall_score, matchResults.missingKeywords, breakdown);
   }
 
-  return {
+  const result: ATSAnalysisResult = {
     overall_score,
     matched_keywords: matchResults.matchedKeywords,
     missing_keywords: matchResults.missingKeywords,
     suggestions: suggestions.slice(0, 5),
     breakdown,
   };
+
+  if (isHeuristicMode) {
+    result.mode = 'heuristic';
+  }
+
+  return result;
 }
