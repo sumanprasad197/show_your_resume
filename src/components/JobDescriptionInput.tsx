@@ -9,6 +9,8 @@ interface JobDescriptionInputProps {
   onChange: (value: string) => void;
   error: string | null;
   onClearError: () => void;
+  onTriggerAnalyze?: () => void;
+  canAnalyze?: boolean;
 }
 
 export const JobDescriptionInput: React.FC<JobDescriptionInputProps> = ({
@@ -17,6 +19,8 @@ export const JobDescriptionInput: React.FC<JobDescriptionInputProps> = ({
   onChange,
   error,
   onClearError,
+  onTriggerAnalyze,
+  canAnalyze = false,
 }) => {
   const isDark = theme === 'dark';
   const wordCount = jobDescription.trim() ? jobDescription.trim().split(/\s+/).length : 0;
@@ -90,6 +94,16 @@ export const JobDescriptionInput: React.FC<JobDescriptionInputProps> = ({
             onClearError();
             onChange(e.target.value);
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              // Trigger analyze if Enter is pressed without Shift and inputs are ready,
+              // or if Ctrl+Enter / Cmd+Enter is pressed. Shift+Enter still inserts a newline.
+              if (e.ctrlKey || e.metaKey || (!e.shiftKey && canAnalyze)) {
+                e.preventDefault();
+                onTriggerAnalyze?.();
+              }
+            }
+          }}
           placeholder="Paste the target job description here, including required skills, qualifications, responsibilities, and seniority level..."
           className={`w-full bg-transparent border-0 resize-y text-sm sm:text-base outline-none leading-relaxed transition-colors placeholder:text-neutral-500 ${
             isDark ? 'text-neutral-100' : 'text-neutral-900'
@@ -110,9 +124,21 @@ export const JobDescriptionInput: React.FC<JobDescriptionInputProps> = ({
               {wordCount} {wordCount === 1 ? 'word' : 'words'} ({charCount} chars)
             </span>
           </div>
-          {jobDescription && wordCount < 15 && (
-            <span className="text-amber-500 font-medium">A longer description yields a more accurate ATS score</span>
-          )}
+
+          <div className="flex items-center gap-2">
+            {canAnalyze && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
+                <span>Press</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 font-mono text-[10px] text-emerald-300">
+                  ↵ Enter
+                </kbd>
+                <span>to analyze</span>
+              </span>
+            )}
+            {jobDescription && wordCount < 15 && !canAnalyze && (
+              <span className="text-amber-500 font-medium">A longer description yields a more accurate ATS score</span>
+            )}
+          </div>
         </div>
       </div>
 

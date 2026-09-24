@@ -186,6 +186,34 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Global keyboard shortcuts for the analysis workflow:
+  // 'Enter' triggers the analyze process when both resume and JD are ready
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if already analyzing or if results are showing
+      if (isAnalyzing || results) return;
+
+      if (e.key === 'Enter') {
+        const activeElement = document.activeElement;
+        const isTextarea = activeElement instanceof HTMLTextAreaElement;
+
+        // In textarea, Shift+Enter is reserved for inserting a newline
+        if (isTextarea && e.shiftKey) {
+          return;
+        }
+
+        // When both resume and JD are ready, Enter triggers analyze
+        if (canAnalyze) {
+          e.preventDefault();
+          handleAnalyze();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canAnalyze, isAnalyzing, results, uploadedPdf, jobDescription]);
+
   return (
     <div
       className={`min-h-screen relative transition-colors duration-300 flex flex-col justify-between ${
@@ -232,6 +260,8 @@ export default function App() {
                 }}
                 error={jobError}
                 onClearError={() => setJobError(null)}
+                canAnalyze={canAnalyze}
+                onTriggerAnalyze={handleAnalyze}
               />
 
               {/* API Level Error Banner if any */}
@@ -262,9 +292,9 @@ export default function App() {
               {/* Prominent Analyze Button with Interactive State Indicator */}
               <div className="pt-2 flex flex-col items-center">
                 {canAnalyze && (
-                  <div className="flex items-center gap-2 mb-3 px-3 py-1 rounded-full text-xs font-medium text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 animate-pulse">
+                  <div className="flex items-center gap-2 mb-3 px-3.5 py-1.5 rounded-full text-xs font-medium text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 animate-pulse">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Inputs ready for recruiter scan</span>
+                    <span>Inputs ready — press <kbd className="px-1.5 py-0.5 rounded bg-emerald-900/60 border border-emerald-700/50 font-mono text-[10px] text-emerald-200">Enter ↵</kbd> to analyze</span>
                   </div>
                 )}
 
@@ -285,6 +315,18 @@ export default function App() {
                 >
                   <Sparkles className="w-5 h-5" />
                   <span>Analyze Resume with ATS</span>
+                  {canAnalyze && !isAnalyzing && (
+                    <kbd
+                      className={`hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-mono rounded-lg border transition-opacity ${
+                        isDark
+                          ? 'bg-neutral-200 text-neutral-900 border-neutral-300'
+                          : 'bg-neutral-800 text-neutral-200 border-neutral-700'
+                      }`}
+                      title="Press Enter to analyze"
+                    >
+                      <span className="text-xs">↵</span> Enter
+                    </kbd>
+                  )}
                 </button>
 
                 {!canAnalyze && (

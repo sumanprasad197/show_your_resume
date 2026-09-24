@@ -43,15 +43,25 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
   const [exportSuccess, setExportSuccess] = useState<boolean>(false);
   const [previewModalDataUrl, setPreviewModalDataUrl] = useState<string | null>(null);
 
-  // Lock background scroll when preview modal is open
+  // Lock background scroll and close on 'Esc' when preview modal is open
   useEffect(() => {
-    if (previewModalDataUrl) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
+    if (!previewModalDataUrl) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPreviewModalDataUrl(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [previewModalDataUrl]);
 
   const handleCopy = (keyword: string) => {
@@ -257,7 +267,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
               {ATS_LABELS.BREAKDOWN_SUBTITLE}
             </p>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium self-start sm:self-auto border border-neutral-700/50 bg-neutral-800/50 text-neutral-300">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium self-start sm:self-auto border border-neutral-700/50 bg-neutral-800/50 text-neutral-300">
             <span>Overall: {results.overall_score}/100</span>
           </div>
         </div>
@@ -299,7 +309,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
                       <span className="text-[11px] text-neutral-500 font-medium">{item.weight}</span>
                     </div>
                   </div>
-                  <span className={`text-sm font-bold font-mono ${scoreColor}`}>
+                  <span className={`text-sm font-bold tabular-nums ${scoreColor}`}>
                     {item.score}%
                   </span>
                 </div>
@@ -641,6 +651,9 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
       {previewModalDataUrl && (
         <div
           id="scorecard-preview-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="scorecard-modal-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) setPreviewModalDataUrl(null);
           }}
@@ -665,13 +678,17 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setPreviewModalDataUrl(null)}
-                className="absolute top-4 right-4 p-2 rounded-full hover:bg-neutral-800/20 cursor-pointer"
-                aria-label="Close modal"
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-neutral-800/20 cursor-pointer flex items-center gap-1.5 text-neutral-400 hover:text-neutral-200"
+                aria-label="Close modal (Esc)"
+                title="Close modal (Esc)"
               >
+                <kbd className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded border border-neutral-700/60 bg-neutral-800/60 text-neutral-400">
+                  ESC
+                </kbd>
                 <X className="w-5 h-5" />
               </button>
 
-              <h3 className="text-lg font-bold mb-1 pr-8">ATS Compatibility Score Card Preview</h3>
+              <h3 id="scorecard-modal-title" className="text-lg font-bold mb-1 pr-14">ATS Compatibility Score Card Preview</h3>
               <p className="text-xs text-neutral-400">
                 Rendered at 1080×1350 with frosted glass aesthetic matching the website.
               </p>
@@ -719,13 +736,15 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setPreviewModalDataUrl(null)}
-                className={`py-2.5 px-4 rounded-xl text-xs font-semibold border cursor-pointer transition-colors ${
+                className={`py-2.5 px-4 rounded-xl text-xs font-semibold border cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${
                   isDark
                     ? 'bg-neutral-800/60 hover:bg-neutral-800 text-neutral-300 border-neutral-700'
                     : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
                 }`}
+                title="Close (Esc)"
               >
-                Close
+                <span>Close</span>
+                <kbd className="text-[10px] font-mono opacity-60">Esc</kbd>
               </button>
             </div>
           </div>

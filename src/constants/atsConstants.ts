@@ -11,7 +11,7 @@ export const ATS_LABELS = {
 
   // Category Breakdown Panel
   BREAKDOWN_TITLE: 'Weighted Category Breakdown',
-  BREAKDOWN_SUBTITLE: 'Deterministic score derived from 4 weighted pillars: 45% Skills + 25% Experience + 15% Education + 15% Readability',
+  BREAKDOWN_SUBTITLE: 'Deterministic score derived from 4 weighted pillars',
 
   // Sections
   MATCHED_SKILLS_TITLE: 'Matched Skills',

@@ -323,7 +323,7 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   // Breakdown overall pill tag on top right
   ctx.textAlign = 'right';
   ctx.fillStyle = isDark ? '#d4d4d8' : '#3f3f46';
-  ctx.font = '600 12px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
+  ctx.font = '600 12px "Plus Jakarta Sans", system-ui, sans-serif';
   ctx.fillText(`Overall: ${score}/100`, 1005, 524);
   ctx.textAlign = 'left';
 
@@ -356,11 +356,11 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
     ctx.font = '500 11px "Plus Jakarta Sans", system-ui, sans-serif';
     ctx.fillText(`(${item.weight})`, colX + ctx.measureText(item.title).width + 6, rowY);
 
-    // Percentage
+    // Percentage (matching the font of /100 in the gauge)
     ctx.textAlign = 'right';
     const catColor = item.scoreVal >= 80 ? '#22c55e' : item.scoreVal >= 60 ? '#eab308' : '#ef4444';
     ctx.fillStyle = catColor;
-    ctx.font = 'bold 13px monospace, "Plus Jakarta Sans", system-ui, sans-serif';
+    ctx.font = 'bold 13px "Plus Jakarta Sans", system-ui, sans-serif';
     ctx.fillText(`${item.scoreVal}%`, colX + itemW, rowY);
     ctx.textAlign = 'left';
 
