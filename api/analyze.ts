@@ -1,4 +1,4 @@
-import { analyzeResume, AnalyzerError } from './analyzer-core.js';
+import { analyzeResume, AnalyzerError } from './analyzer-core.ts';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

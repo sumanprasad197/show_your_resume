@@ -592,7 +592,7 @@ export async function analyzeResume(params: AnalyzeResumeParams): Promise<ATSAna
     },
   });
 
-  const models = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-flash-latest'];
+  const models = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
   // -----------------------------------------------------------------------
   // STAGE 1 — EXTRACTION: Two Gemini calls (temperature 0.2)
