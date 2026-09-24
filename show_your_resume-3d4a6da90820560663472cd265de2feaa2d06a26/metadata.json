@@ -1,0 +1,6 @@
+{
+  "name": "Show Your Resume — Resume Analyzer with Strict ATS Match Engine",
+  "description": "See your resume the way a recruiter scans it. Upload your resume and get a clear read on what will make it through the first filter.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
