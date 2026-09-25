@@ -143,7 +143,7 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
             }`}
           >
             <Sparkles className="w-3 h-3 text-neutral-400" />
-            <span>Try with sample resume</span>
+            <span>Try with Sample</span>
           </button>
         )}
       </div>

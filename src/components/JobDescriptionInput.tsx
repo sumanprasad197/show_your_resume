@@ -60,7 +60,7 @@ export const JobDescriptionInput: React.FC<JobDescriptionInputProps> = ({
               }`}
             >
               <Sparkles className="w-3 h-3 text-neutral-400" />
-              <span>Try with sample job desc</span>
+              <span>Try with Sample</span>
             </button>
           )}
           {jobDescription && (
