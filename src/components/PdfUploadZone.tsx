@@ -118,6 +118,12 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
         setExtractionStatus('Reading scanned PDF...');
         setExtractionSubtext('Using AI OCR to extract resume text');
 
+        // While retrying, update loading state so the user knows it's working
+        const retryTimer = setTimeout(() => {
+          setExtractionStatus("Google's servers are busy — retrying...");
+          setExtractionSubtext('Waiting for AI capacity and retrying...');
+        }, 3000);
+
         try {
           const ocrText = await requestOcrForPdf(file);
           if (!ocrText || ocrText.trim().length === 0) {
@@ -126,10 +132,20 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
           text = ocrText;
         } catch (ocrErr: any) {
           console.error('OCR fallback extraction error for file:', file.name, ocrErr);
-          const errorMsg = ocrErr?.message || 'OCR extraction failed for this PDF.';
+          const rawMsg = ocrErr?.message || '';
+          const isBusy =
+            rawMsg.includes('temporarily busy') ||
+            rawMsg.includes('503') ||
+            rawMsg.includes('UNAVAILABLE') ||
+            rawMsg.includes('high demand');
+          const errorMsg = isBusy
+            ? "Google's AI servers are temporarily busy. Please try again in a few minutes."
+            : rawMsg || 'OCR extraction failed for this PDF.';
           setErrorMessage(errorMsg);
           onPdfUploaded(null);
           return;
+        } finally {
+          clearTimeout(retryTimer);
         }
       }
 

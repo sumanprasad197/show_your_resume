@@ -16,6 +16,8 @@ export interface PerformOcrParams {
   pdfBase64: string;
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Extracts a readable message from Google Gemini API errors.
  */
@@ -48,6 +50,26 @@ function parseApiError(err: any): { message: string; code?: number; status?: str
   }
 
   return { message: err.message || String(err) };
+}
+
+function is503Error(parsed: { message: string; code?: number; status?: string }, rawErr: any): boolean {
+  if (parsed.code === 503 || parsed.status === 'UNAVAILABLE') return true;
+  if (rawErr?.status === 503 || rawErr?.code === 503) return true;
+  const combined = `${parsed.message} ${parsed.status || ''} ${rawErr?.message || ''}`.toLowerCase();
+  return (
+    combined.includes('503') ||
+    combined.includes('unavailable') ||
+    combined.includes('high demand') ||
+    combined.includes('temporarily unavailable') ||
+    combined.includes('server overload')
+  );
+}
+
+function is429Error(parsed: { message: string; code?: number; status?: string }, rawErr: any): boolean {
+  if (parsed.code === 429 || parsed.status === 'RESOURCE_EXHAUSTED') return true;
+  if (rawErr?.status === 429 || rawErr?.code === 429) return true;
+  const combined = `${parsed.message} ${parsed.status || ''} ${rawErr?.message || ''}`.toLowerCase();
+  return combined.includes('429') || combined.includes('quota') || combined.includes('resource_exhausted');
 }
 
 export async function performOcr(params: PerformOcrParams): Promise<{ text: string; fileSizeBytes: number }> {
@@ -102,60 +124,135 @@ export async function performOcr(params: PerformOcrParams): Promise<{ text: stri
   const prompt =
     'Extract ALL text from this resume PDF as plain text, preserving the content, order, and structure. Return only the text.';
 
-  const modelAttempts: { model: string; outcome: 'success' | 'empty' | 'error'; message: string; code?: number }[] = [];
+  const modelAttempts: {
+    pass: number;
+    model: string;
+    attempt: number;
+    outcome: 'success' | 'empty' | 'error';
+    message: string;
+    code?: number;
+    is503?: boolean;
+  }[] = [];
 
-  for (const model of models) {
-    try {
-      console.log(`[OCR] Attempting extraction with model: ${model} (File size: ${fileSizeMB} MB)`);
-      const response = await ai.models.generateContent({
-        model,
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: 'application/pdf',
-                data: cleanBase64,
-              },
-            },
-            {
-              text: prompt,
-            },
-          ],
-        },
-      });
+  let encountered503 = false;
 
-      const extractedText = response.text ? response.text.trim() : '';
-      if (extractedText.length > 0) {
-        console.log(`[OCR Success] Model ${model} extracted ${extractedText.length} characters.`);
-        return { text: extractedText, fileSizeBytes };
+  // Run up to 2 complete passes through the waterfall
+  for (let pass = 1; pass <= 2; pass++) {
+    if (pass === 2) {
+      // Requirement 2: After the full waterfall fails, wait 5 seconds and run one more complete pass
+      console.log('[OCR] Full waterfall failed. Waiting 5 seconds before running one more complete pass...');
+      await sleep(5000);
+    }
+
+    for (const model of models) {
+      // Requirement 1: when a model returns 503/UNAVAILABLE, wait 3 seconds and retry the SAME model, up to 3 attempts
+      const maxAttempts = 3;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          console.log(
+            `[OCR] [Pass ${pass}] Model ${model} (Attempt ${attempt}/${maxAttempts}) - File size: ${fileSizeMB} MB`
+          );
+
+          const response = await ai.models.generateContent({
+            model,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: 'application/pdf',
+                    data: cleanBase64,
+                  },
+                },
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          });
+
+          const extractedText = response.text ? response.text.trim() : '';
+          if (extractedText.length > 0) {
+            console.log(
+              `[OCR Success] [Pass ${pass}] Model ${model} succeeded on attempt ${attempt} (${extractedText.length} chars).`
+            );
+            return { text: extractedText, fileSizeBytes };
+          }
+
+          console.warn(`[OCR Warning] [Pass ${pass}] Model ${model} returned empty text (0 characters).`);
+          modelAttempts.push({
+            pass,
+            model,
+            attempt,
+            outcome: 'empty',
+            message: 'Model returned 0 characters (empty text response).',
+          });
+          // Do not retry on empty text; move to next model
+          break;
+        } catch (err: any) {
+          const parsed = parseApiError(err);
+          const errIs429 = is429Error(parsed, err);
+          const errIs503 = !errIs429 && is503Error(parsed, err);
+
+          if (errIs503) {
+            encountered503 = true;
+          }
+
+          console.warn(
+            `[OCR Error] [Pass ${pass}] Model ${model} (Attempt ${attempt}) failed: ${parsed.message} (is503: ${errIs503}, is429: ${errIs429})`
+          );
+
+          modelAttempts.push({
+            pass,
+            model,
+            attempt,
+            outcome: 'error',
+            message: parsed.message,
+            code: parsed.code,
+            is503: errIs503,
+          });
+
+          // Requirement 1: when a model returns 503/UNAVAILABLE, wait 3 seconds and retry the SAME model, up to 3 attempts
+          if (errIs503 && attempt < maxAttempts) {
+            console.log(
+              `[OCR] Model ${model} returned 503/UNAVAILABLE. Waiting 3 seconds before retry attempt ${attempt + 1}...`
+            );
+            await sleep(3000);
+            continue; // retry same model
+          }
+
+          // Requirement 5: Do NOT auto-retry on 429 quota errors (or other non-503 errors); move to next model
+          break;
+        }
       }
+    }
 
-      console.warn(`[OCR Warning] Model ${model} responded with 200 OK but returned empty text (0 characters).`);
-      modelAttempts.push({
-        model,
-        outcome: 'empty',
-        message: 'Model returned 0 characters (empty text response).',
-      });
-    } catch (err: any) {
-      const parsed = parseApiError(err);
-      console.warn(`[OCR Error] Model ${model} failed: ${parsed.message}`);
-      modelAttempts.push({
-        model,
-        outcome: 'error',
-        message: parsed.message,
-        code: parsed.code,
-      });
+    // If Pass 1 completed without encountering any 503 errors (e.g. only 429 quota errors),
+    // do NOT run Pass 2 (satisfies Requirement 5: Do NOT auto-retry on 429 quota errors)
+    if (pass === 1 && !encountered503) {
+      console.log('[OCR] Pass 1 completed without 503 errors; skipping pass 2.');
+      break;
     }
   }
 
-  // If we reach here, all models in the waterfall failed or returned empty text
-  console.error('[OCR Exhausted Waterfall Diagnostics]', {
+  // Requirement 4: If it still fails after all retries, log details server-side
+  console.error('[OCR Failure Diagnostic after all retries]', {
     fileSizeBytes,
     fileSizeMB,
+    encountered503,
     modelAttempts,
   });
 
-  // Build specific, informative error message
+  // Requirement 4: If 503 caused the failure after all retries, return the specific friendly busy error
+  if (encountered503) {
+    throw new OcrError(
+      "Google's AI servers are temporarily busy. Please try again in a few minutes.",
+      503,
+      { fileSizeBytes, fileSizeMB, modelAttempts }
+    );
+  }
+
+  // Check if all models returned empty text
   const allEmpty = modelAttempts.every((a) => a.outcome === 'empty');
   if (allEmpty) {
     throw new OcrError(
@@ -165,9 +262,9 @@ export async function performOcr(params: PerformOcrParams): Promise<{ text: stri
     );
   }
 
-  // Find the primary error from models
-  const lastAttempt = modelAttempts[modelAttempts.length - 1];
+  // If failed due to 429 or other errors, retain the specific error message
   const firstError = modelAttempts.find((a) => a.outcome === 'error');
+  const lastAttempt = modelAttempts[modelAttempts.length - 1];
   const primaryErrorText = firstError?.message || lastAttempt?.message || 'Unknown model error';
 
   throw new OcrError(
