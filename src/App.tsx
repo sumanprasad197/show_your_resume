@@ -39,9 +39,13 @@ export default function App() {
     resultsRef.current = results;
   }, [results]);
 
+  // Flag to differentiate when user clicks "Edit current inputs" vs browser/gesture Back
+  const isEditingInputsRef = React.useRef<boolean>(false);
+
   // Browser Back button support via native History API (popstate):
-  // When user is viewing results and presses browser/Android Back,
-  // return to the input screen with uploaded resume and job description intact.
+  // - Browser/Android Back button or back gesture while on results: returns to a FRESH, empty input screen.
+  // - "Edit current inputs" button: returns to input screen with inputs INTACT.
+  // - Back while already on input screen: normal browser navigation (leave the site).
   useEffect(() => {
     // If the page was refreshed or loaded fresh with a stale 'results' history state, clean it up
     if (typeof window !== 'undefined' && !resultsRef.current && window.history.state?.screen === 'results') {
@@ -49,9 +53,21 @@ export default function App() {
     }
 
     const handlePopState = () => {
-      // If results are currently showing, popping history returns to the input screen
+      // If results are currently showing, popping history returns to input screen
       if (resultsRef.current) {
-        setResults(null);
+        if (isEditingInputsRef.current) {
+          // Triggered by "Edit current inputs" button: preserve inputs intact
+          isEditingInputsRef.current = false;
+          setResults(null);
+        } else {
+          // Triggered by Browser Back button or Android gesture: start over with fresh empty screen
+          setResults(null);
+          setUploadedPdf(null);
+          setJobDescription('');
+          setPdfError(null);
+          setJobError(null);
+          setApiError(null);
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
@@ -216,10 +232,16 @@ export default function App() {
 
   // Return from results screen to input screen preserving uploaded resume & job description
   const handleBackToInputs = () => {
+    isEditingInputsRef.current = true;
     if (typeof window !== 'undefined' && window.history.state?.screen === 'results') {
       window.history.back();
+      // Safeguard timeout to reset flag in edge cases where popstate does not execute
+      setTimeout(() => {
+        isEditingInputsRef.current = false;
+      }, 300);
     } else {
       setResults(null);
+      isEditingInputsRef.current = false;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
