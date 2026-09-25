@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { analyzeResume, AnalyzerError } from './api/analyzer-core.js';
+import { performOcr, OcrError } from './api/ocr.js';
 
 dotenv.config();
 
@@ -13,12 +14,47 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
+
+// Payload size error handling middleware
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err?.type === 'entity.too.large' || err?.status === 413) {
+    return res.status(413).json({
+      error: 'PDF payload exceeds the 25MB transmission limit. Please upload a smaller or compressed PDF (under 10 MB).',
+    });
+  }
+  next(err);
+});
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+// OCR endpoint for scanned/image-based resume PDFs
+app.route('/api/ocr')
+  .post(async (req, res) => {
+    try {
+      const pdfBase64 = req.body?.pdfBase64;
+      if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+        return res.status(400).json({ error: 'No PDF data provided for OCR extraction (empty payload received).' });
+      }
+      const result = await performOcr({ pdfBase64 });
+      return res.status(200).json(result);
+    } catch (error: any) {
+      console.error('[Server /api/ocr caught error]:', error);
+      const status = error instanceof OcrError ? error.status : (error?.status || 500);
+      const message = error?.message || 'Server encountered an unexpected failure during OCR processing.';
+      return res.status(status).json({
+        error: message,
+        details: error?.details || undefined,
+      });
+    }
+  })
+  .all((_req, res) => {
+    res.setHeader('Allow', ['POST']);
+    res.status(405).json({ error: 'Method not allowed. Please use POST.' });
+  });
 
 // Universal ATS Resume Analysis endpoint
 app.route('/api/analyze')

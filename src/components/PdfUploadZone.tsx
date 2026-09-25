@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileCheck, AlertCircle, Trash2, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import { extractTextFromPdf } from '../utils/pdfParser';
+import { requestOcrForPdf } from '../utils/ocrService';
 import { UploadedPdfInfo, ThemeMode } from '../types';
 import { SAMPLE_RESUME_TEXT } from '../data/sampleData';
 
@@ -23,6 +24,8 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionStatus, setExtractionStatus] = useState<string>('Extracting text from PDF...');
+  const [extractionSubtext, setExtractionSubtext] = useState<string>('Processing document pages with pdf.js');
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -33,30 +36,101 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
   const processFile = async (file: File) => {
     setErrorMessage(null);
 
+    if (!file) {
+      console.warn('PDF upload: No file selected');
+      setErrorMessage('No file was selected. Please choose a resume PDF.');
+      return;
+    }
+
+    if (file.size === 0) {
+      console.warn('PDF upload: Selected file is 0 bytes:', file.name);
+      setErrorMessage('The selected file is empty (0 bytes). Please upload a valid resume PDF.');
+      return;
+    }
+
+    const fileName = (file.name || '').toLowerCase();
+    const fileType = (file.type || '').toLowerCase();
+
+    // Accept if MIME is application/pdf (or application/x-pdf) OR filename ends with .pdf
+    // Never reject based on MIME type alone (e.g. Android file managers reporting application/octet-stream)
     const isPdf =
-      file.type === 'application/pdf' ||
-      file.type === 'application/x-pdf' ||
-      file.name.toLowerCase().endsWith('.pdf');
+      fileName.endsWith('.pdf') ||
+      fileType === 'application/pdf' ||
+      fileType === 'application/x-pdf';
 
     if (!isPdf) {
+      console.warn(`PDF upload rejected: name="${file.name}", type="${file.type}". Not recognized as PDF.`);
       setErrorMessage('Please upload a valid PDF document (.pdf).');
       return;
     }
 
     if (file.size > 15 * 1024 * 1024) {
+      console.warn(`PDF upload rejected: file size ${file.size} exceeds 15MB limit`);
       setErrorMessage('PDF file is too large (max 15MB). Please upload a smaller resume file.');
       return;
     }
 
     try {
       setIsExtracting(true);
-      const { text, pageCount } = await extractTextFromPdf(file);
+      setExtractionStatus('Extracting text from PDF...');
+      setExtractionSubtext('Processing document pages with pdf.js');
 
-      // Check for scanned / image-only PDF edge case
-      if (!text || text.trim().length < 40) {
-        setErrorMessage('This looks like a scanned PDF — try a text-based version');
-        onPdfUploaded(null);
-        return;
+      let text = '';
+      let pageCount = 1;
+      let clientExtractFailed = false;
+
+      // Stage 1: Attempt client-side PDF text extraction
+      try {
+        const clientResult = await extractTextFromPdf(file);
+        text = clientResult.text || '';
+        pageCount = clientResult.pageCount || 1;
+      } catch (clientErr: any) {
+        console.warn('Client-side pdf.js extraction failed, checking for OCR fallback:', clientErr);
+        const isPassword =
+          clientErr?.name === 'PasswordException' ||
+          String(clientErr?.message || '').toLowerCase().includes('password');
+
+        if (isPassword) {
+          setErrorMessage('This PDF is password-protected. Please upload an unprotected PDF version of your resume.');
+          onPdfUploaded(null);
+          return;
+        }
+        clientExtractFailed = true;
+      }
+
+      // Stage 2: If extracted text is under ~100 characters or client extraction failed,
+      // treat as a scanned/image PDF and invoke the Gemini OCR fallback endpoint
+      const isScannedPdf = clientExtractFailed || !text || text.trim().length < 100;
+
+      if (isScannedPdf) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        // Enforce 10 MB limit for scanned OCR route
+        if (file.size > 10 * 1024 * 1024) {
+          console.warn(`Scanned PDF "${file.name}" exceeds 10 MB limit for OCR: ${file.size} bytes`);
+          setErrorMessage(
+            `This scanned PDF is over 10 MB (${sizeMB} MB). Please try a text-based version or compress the PDF to under 10 MB.`
+          );
+          onPdfUploaded(null);
+          return;
+        }
+
+        // Show visible OCR loading state
+        setExtractionStatus('Reading scanned PDF...');
+        setExtractionSubtext('Using AI OCR to extract resume text');
+
+        try {
+          const ocrText = await requestOcrForPdf(file);
+          if (!ocrText || ocrText.trim().length === 0) {
+            throw new Error(`OCR completed but returned 0 characters (${sizeMB} MB file).`);
+          }
+          text = ocrText;
+        } catch (ocrErr: any) {
+          console.error('OCR fallback extraction error for file:', file.name, ocrErr);
+          const errorMsg = ocrErr?.message || 'OCR extraction failed for this PDF.';
+          setErrorMessage(errorMsg);
+          onPdfUploaded(null);
+          return;
+        }
       }
 
       onPdfUploaded({
@@ -65,14 +139,15 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
         pageCount,
         text,
       });
-    } catch (err) {
-      console.error('Error parsing PDF:', err);
-      setErrorMessage(
-        'Unable to extract text from this PDF. It may be password-protected or corrupted. Please try another text-based PDF.'
-      );
+    } catch (err: any) {
+      console.error('Unhandled PDF upload error for file:', file.name, err);
+      const errorMsg = err?.message || 'Unable to process this PDF file. Please try another text-based PDF.';
+      setErrorMessage(errorMsg);
       onPdfUploaded(null);
     } finally {
       setIsExtracting(false);
+      setExtractionStatus('Extracting text from PDF...');
+      setExtractionSubtext('Processing document pages with pdf.js');
     }
   };
 
@@ -152,7 +227,7 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
         ref={fileInputRef}
         id="resume-file-input"
         type="file"
-        accept=".pdf,application/pdf,application/x-pdf"
+        accept=".pdf,.PDF,application/pdf,application/x-pdf,application/octet-stream"
         onChange={handleFileInputChange}
         className="sr-only"
         tabIndex={-1}
@@ -265,14 +340,14 @@ export const PdfUploadZone: React.FC<PdfUploadZoneProps> = ({
                   isDark ? 'text-neutral-200' : 'text-neutral-800'
                 }`}
               >
-                Extracting text from PDF...
+                {extractionStatus}
               </p>
               <p
                 className={`text-xs mt-1 ${
                   isDark ? 'text-neutral-500' : 'text-neutral-500'
                 }`}
               >
-                Processing document pages with pdf.js
+                {extractionSubtext}
               </p>
             </div>
           ) : (

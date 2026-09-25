@@ -8,33 +8,48 @@ if (typeof window !== 'undefined') {
 }
 
 export async function extractTextFromPdf(file: File): Promise<{ text: string; pageCount: number }> {
-  // Fallback if not set
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  try {
+    // Fallback if not set
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      throw new Error('PDF file buffer is empty (0 bytes).');
+    }
+
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      useSystemFonts: true,
+      stopAtErrors: false,
+    });
+
+    const pdfDoc = await loadingTask.promise;
+    const pageCount = pdfDoc.numPages;
+    let fullText = '';
+
+    for (let i = 1; i <= pageCount; i++) {
+      try {
+        const page = await pdfDoc.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((item: any) => ('str' in item ? item.str : ''))
+          .join(' ');
+        fullText += pageText + ' ';
+      } catch (pageErr) {
+        console.warn(`Error extracting text from page ${i} of ${file.name}:`, pageErr);
+      }
+    }
+
+    return {
+      text: fullText.trim(),
+      pageCount,
+    };
+  } catch (error) {
+    console.error('extractTextFromPdf encountered an error for file:', file.name, error);
+    throw error;
   }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(arrayBuffer),
-    useSystemFonts: true,
-  });
-
-  const pdfDoc = await loadingTask.promise;
-  const pageCount = pdfDoc.numPages;
-  let fullText = '';
-
-  for (let i = 1; i <= pageCount; i++) {
-    const page = await pdfDoc.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((item: any) => ('str' in item ? item.str : ''))
-      .join(' ');
-    fullText += pageText + ' ';
-  }
-
-  return {
-    text: fullText.trim(),
-    pageCount,
-  };
 }

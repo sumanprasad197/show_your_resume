@@ -114,7 +114,9 @@ export default function App() {
     }
 
     if (uploadedPdf.text.trim().length < 40) {
-      setPdfError('This looks like a scanned PDF — try a text-based version');
+      setPdfError(
+        "Couldn't read this PDF — it may be a scanned image with no selectable text. Try exporting it as a text-based PDF."
+      );
       return;
     }
 
@@ -317,7 +319,9 @@ export default function App() {
                 uploadedPdf={uploadedPdf}
                 onPdfUploaded={(info) => {
                   setUploadedPdf(info);
-                  setPdfError(null);
+                  if (info) {
+                    setPdfError(null);
+                  }
                 }}
                 errorMessage={pdfError}
                 setErrorMessage={setPdfError}
