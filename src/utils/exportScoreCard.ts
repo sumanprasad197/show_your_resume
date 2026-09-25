@@ -573,12 +573,6 @@ export async function generateScoreCardCanvas({ results, theme }: ExportOptions)
   ctx.fillStyle = resGradient;
   ctx.fillText(resText, resX, logoBaselineY);
 
-  // 3. Greek alpha "α" aligned with middle bar of E in RESUME
-  const alphaX = resX + resWidth + tightGap;
-  ctx.fillStyle = isDark ? '#d4d4d8' : '#3f3f46';
-  ctx.font = '600 14px "Plus Jakarta Sans", system-ui, sans-serif';
-  ctx.fillText('α', alphaX, logoBaselineY - 1);
-
   // Footer Left, row 2: "Resume Analyzer powered by Suman's ATS Match Engine"
   ctx.fillStyle = isDark ? '#71717a' : '#64748b';
   ctx.font = '500 12px "Plus Jakarta Sans", system-ui, sans-serif';

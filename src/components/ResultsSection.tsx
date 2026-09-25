@@ -18,6 +18,7 @@ import {
   GraduationCap,
   FileCheck,
   Eye,
+  ArrowLeft,
 } from 'lucide-react';
 import { downloadScoreCardImage, generateScoreCardCanvas } from '../utils/exportScoreCard';
 import { ATS_LABELS, CATEGORY_DEFINITIONS } from '../constants/atsConstants';
@@ -26,12 +27,14 @@ interface ResultsSectionProps {
   results: AnalysisResult;
   theme: ThemeMode;
   onReset: () => void;
+  onBack?: () => void;
 }
 
 export const ResultsSection: React.FC<ResultsSectionProps> = ({
   results,
   theme,
   onReset,
+  onBack,
 }) => {
   const isDark = theme === 'dark';
   const [copiedKeyword, setCopiedKeyword] = useState<string | null>(null);
@@ -630,19 +633,34 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
         </div>
       </div>
 
-      {/* Action Button: Analyze Another Resume */}
-      <div className="pt-4 pb-12 flex justify-center">
+      {/* Action Button: Analyze Another Resume / Edit Inputs */}
+      <div className="pt-6 pb-12 flex flex-col sm:flex-row items-center justify-center gap-4">
+        {onBack && (
+          <button
+            id="back-to-inputs-button"
+            type="button"
+            onClick={onBack}
+            className={`flex items-center gap-2 px-6 py-3.5 rounded-2xl font-semibold text-sm border transition-all duration-200 cursor-pointer active:scale-95 ${
+              isDark
+                ? 'border-neutral-800 bg-neutral-900/80 hover:bg-neutral-800 text-neutral-200'
+                : 'border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-800'
+            }`}
+          >
+            <ArrowLeft className="w-3.5 h-3.5 stroke-[1.75]" />
+            <span>Edit current inputs</span>
+          </button>
+        )}
         <button
           id="analyze-another-button"
           type="button"
           onClick={onReset}
-          className={`flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-semibold text-sm transition-all duration-200 cursor-pointer shadow-lg active:scale-95 ${
+          className={`flex items-center gap-2 px-6 py-3.5 rounded-2xl font-semibold text-sm transition-all duration-200 cursor-pointer shadow-lg active:scale-95 ${
             isDark
               ? 'bg-white hover:bg-neutral-200 text-black shadow-white/5'
               : 'bg-neutral-900 hover:bg-neutral-800 text-white shadow-neutral-900/10'
           }`}
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-3.5 h-3.5 stroke-[1.75]" />
           <span>Analyze another resume</span>
         </button>
       </div>

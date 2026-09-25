@@ -33,6 +33,33 @@ export default function App() {
   const [jobError, setJobError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Reference to current results for popstate listener to avoid stale closures
+  const resultsRef = React.useRef<AnalysisResult | null>(results);
+  useEffect(() => {
+    resultsRef.current = results;
+  }, [results]);
+
+  // Browser Back button support via native History API (popstate):
+  // When user is viewing results and presses browser/Android Back,
+  // return to the input screen with uploaded resume and job description intact.
+  useEffect(() => {
+    // If the page was refreshed or loaded fresh with a stale 'results' history state, clean it up
+    if (typeof window !== 'undefined' && !resultsRef.current && window.history.state?.screen === 'results') {
+      window.history.replaceState(null, '');
+    }
+
+    const handlePopState = () => {
+      // If results are currently showing, popping history returns to the input screen
+      if (resultsRef.current) {
+        setResults(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Sync theme to localStorage and document root
   useEffect(() => {
     localStorage.setItem('syr_theme', theme);
@@ -158,6 +185,17 @@ export default function App() {
 
       setResults(data);
 
+      // Push browser history entry for results screen using native History API.
+      // If user re-runs analysis from input screen while already on a results state,
+      // replaceState is used to prevent stacking duplicate history entries.
+      if (typeof window !== 'undefined') {
+        if (window.history.state?.screen === 'results') {
+          window.history.replaceState({ screen: 'results' }, '');
+        } else {
+          window.history.pushState({ screen: 'results' }, '');
+        }
+      }
+
       // Scroll smoothly down to results
       setTimeout(() => {
         const resultsEl = document.getElementById('results-section');
@@ -176,7 +214,20 @@ export default function App() {
     }
   };
 
+  // Return from results screen to input screen preserving uploaded resume & job description
+  const handleBackToInputs = () => {
+    if (typeof window !== 'undefined' && window.history.state?.screen === 'results') {
+      window.history.back();
+    } else {
+      setResults(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const handleReset = () => {
+    if (typeof window !== 'undefined' && window.history.state?.screen === 'results') {
+      window.history.back();
+    }
     setUploadedPdf(null);
     setJobDescription('');
     setResults(null);
@@ -303,7 +354,7 @@ export default function App() {
                   type="button"
                   disabled={!canAnalyze || isAnalyzing}
                   onClick={handleAnalyze}
-                  className={`w-full sm:w-auto min-w-[300px] flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl font-bold text-base tracking-tight transition-all duration-300 shadow-xl ${
+                  className={`flex items-center justify-center gap-2 px-5 sm:px-6 py-3 rounded-2xl font-semibold text-sm tracking-tight transition-all duration-300 shadow-lg ${
                     canAnalyze && !isAnalyzing
                       ? isDark
                         ? 'bg-white text-black hover:bg-neutral-200 active:scale-98 cursor-pointer shadow-white/10 hover:shadow-white/20'
@@ -313,11 +364,11 @@ export default function App() {
                       : 'bg-neutral-200 text-neutral-400 border border-neutral-300 cursor-not-allowed opacity-60'
                   }`}
                 >
-                  <Sparkles className="w-5 h-5" />
+                  <Sparkles className="w-4 h-4" />
                   <span>Analyze Resume with ATS</span>
                   {canAnalyze && !isAnalyzing && (
                     <kbd
-                      className={`hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-mono rounded-lg border transition-opacity ${
+                      className={`hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono rounded-md border transition-opacity ${
                         isDark
                           ? 'bg-neutral-200 text-neutral-900 border-neutral-300'
                           : 'bg-neutral-800 text-neutral-200 border-neutral-700'
@@ -328,21 +379,6 @@ export default function App() {
                     </kbd>
                   )}
                 </button>
-
-                {!canAnalyze && (
-                  <p
-                    id="analyze-hint-text"
-                    className={`text-xs mt-3 ${
-                      isDark ? 'text-neutral-500' : 'text-neutral-500'
-                    }`}
-                  >
-                    {!uploadedPdf && !jobDescription
-                      ? 'Upload your resume PDF and paste a job description to activate analysis'
-                      : !uploadedPdf
-                      ? 'Please upload your resume PDF above'
-                      : 'Please paste the job description above'}
-                  </p>
-                )}
               </div>
             </div>
           )}
@@ -357,24 +393,22 @@ export default function App() {
           {/* Results Section */}
           {results && !isAnalyzing && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-800/40 dark:border-neutral-800/60 light:border-neutral-200">
+              {/* Section Header with Beep Indicator & Section Break Line */}
+              <div
+                className={`flex items-center justify-between pb-2.5 border-b transition-colors ${
+                  isDark ? 'border-neutral-800/60' : 'border-neutral-200'
+                }`}
+              >
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-500">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
                   <span>Analysis Ready</span>
                 </div>
-                <button
-                  id="quick-reset-btn"
-                  type="button"
-                  onClick={handleReset}
-                  className={`text-xs underline underline-offset-4 cursor-pointer ${
-                    isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
-                  }`}
-                >
-                  Start over with new inputs
-                </button>
               </div>
 
-              <ResultsSection results={results} theme={theme} onReset={handleReset} />
+              <ResultsSection results={results} theme={theme} onReset={handleReset} onBack={handleBackToInputs} />
             </div>
           )}
         </main>
@@ -391,14 +425,14 @@ export default function App() {
       >
         {/* Left Side: Brand Logo + Subtitle */}
         <div className="flex flex-col lg:flex-row items-center md:items-start lg:items-center gap-1.5 md:gap-1 lg:gap-3 text-center md:text-left">
-          {/* Logo with clean lowercase "show your" and bold uppercase "RESUME" plus titanium alpha symbol - aligned through the middle beside E with reduced spacing */}
+          {/* Logo matching header reference ("show your" and "RESUME") with middle alignment and alpha symbol removed */}
           <button
             id="footer-brand-logo"
             type="button"
             onClick={handleReset}
             title="Go to Home"
             aria-label="Show Your Resume Home"
-            className="inline-flex items-baseline gap-1 sm:gap-1.5 select-none cursor-pointer bg-transparent border-0 p-0 text-left transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded-md"
+            className="inline-flex items-center gap-1.5 sm:gap-2 select-none cursor-pointer bg-transparent border-0 p-0 text-left transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded-md"
           >
             <span
               className={`text-sm font-semibold tracking-widest lowercase ${
@@ -407,24 +441,12 @@ export default function App() {
             >
               show your
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span
-                className={`font-black tracking-wider text-xl leading-none uppercase ${
-                  isDark ? 'titanium-dark-silver' : 'titanium-light-silver'
-                }`}
-              >
-                RESUME
-              </span>
-              <span
-                id="footer-brand-alpha-sign"
-                className={`font-semibold text-xs leading-none select-none lowercase inline-block translate-y-[0.5px] ${
-                  isDark ? 'titanium-dark-deep' : 'titanium-light-deep'
-                }`}
-                title="Alpha"
-                aria-label="Alpha"
-              >
-                α
-              </span>
+            <span
+              className={`font-black tracking-wider text-xl leading-none uppercase ${
+                isDark ? 'titanium-dark-silver' : 'titanium-light-silver'
+              }`}
+            >
+              RESUME
             </span>
           </button>
 
