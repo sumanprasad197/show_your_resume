@@ -6,11 +6,12 @@ import { LoadingState } from './components/LoadingState';
 import { ResultsSection } from './components/ResultsSection';
 import { BackgroundGradients } from './components/BackgroundGradients';
 import { UploadedPdfInfo, AnalysisResult, ThemeMode } from './types';
-import { Sparkles, AlertCircle, CheckCircle2, Github, Instagram } from 'lucide-react';
+import { Sparkles, AlertCircle, CheckCircle2, Github, Instagram, MessageSquareText } from 'lucide-react';
 
 // Profile links for Suman Prasad Sahoo
 const GITHUB_PROFILE_URL = 'https://github.com/sumanprasad197';
 const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/sumxnprxsxd._?stkn=YThzMzhtNzZnaTVi';
+const FEEDBACK_FORM_URL = 'https://tally.so/r/Gx8prp';
 
 export default function App() {
   // Theme state: dark-first with pure black (#000000), persisting to localStorage
@@ -141,11 +142,18 @@ export default function App() {
       }
     }, 100);
 
+    // Client-side safety net: abort request if /api/analyze does not respond within 50s
+    const abortController = new AbortController();
+    const clientTimeoutId = setTimeout(() => {
+      abortController.abort();
+    }, 50000);
+
     const apiPromise = fetch('/api/analyze', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: abortController.signal,
       body: JSON.stringify({
         resumeText: uploadedPdf.text,
         jobDescription: trimmedJob,
@@ -223,11 +231,16 @@ export default function App() {
       }, 150);
     } catch (err: any) {
       console.error('Analysis error:', err);
-      setApiError(
-        err?.message ||
-          'A temporary error occurred while analyzing your resume. Please check your inputs and try again.'
-      );
+      if (err?.name === 'AbortError' || abortController.signal.aborted) {
+        setApiError('Analysis took too long — please try again in a minute.');
+      } else {
+        setApiError(
+          err?.message ||
+            'A temporary error occurred while analyzing your resume. Please check your inputs and try again.'
+        );
+      }
     } finally {
+      clearTimeout(clientTimeoutId);
       setIsAnalyzing(false);
     }
   };
@@ -440,13 +453,32 @@ export default function App() {
         </main>
       </div>
 
+      {/* Share Feedback Button */}
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 mb-3 relative z-10 flex justify-center md:justify-end">
+        <a
+          id="share-feedback-btn"
+          href={FEEDBACK_FORM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-150 ${
+            isDark
+              ? 'text-neutral-400 hover:text-neutral-200 bg-neutral-900/50 hover:bg-neutral-800/80 border border-neutral-800/80 hover:border-neutral-700'
+              : 'text-neutral-600 hover:text-neutral-900 bg-neutral-100/60 hover:bg-neutral-200/70 border border-neutral-200 hover:border-neutral-300'
+          }`}
+          aria-label="Share Feedback"
+        >
+          <MessageSquareText className="w-3.5 h-3.5" />
+          <span>Share Feedback</span>
+        </a>
+      </div>
+
       {/* Footer */}
       <footer
         id="app-footer"
-        className={`w-full max-w-5xl mx-auto py-6 px-4 sm:px-6 border-t transition-colors relative z-10 flex flex-col md:flex-row items-center justify-between gap-5 md:gap-4 text-xs ${
+        className={`w-full max-w-5xl mx-auto py-6 px-4 sm:px-6 border-t border-dashed transition-colors relative z-10 flex flex-col md:flex-row items-center justify-between gap-5 md:gap-4 text-xs ${
           isDark
-            ? 'border-neutral-900/80 text-neutral-500'
-            : 'border-neutral-200 text-neutral-600'
+            ? 'border-neutral-800/80 text-neutral-500'
+            : 'border-neutral-300 text-neutral-600'
         }`}
       >
         {/* Left Side: Brand Logo + Subtitle */}

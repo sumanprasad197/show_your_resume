@@ -556,6 +556,20 @@ function generateDeterministicSuggestions(
   return suggestions.slice(0, 4);
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`[Timeout] ${label} exceeded ${ms}ms limit`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
 // =========================================================================
 // MAIN PIPELINE EXECUTION
 // =========================================================================
@@ -649,17 +663,22 @@ ${jobDescription.slice(0, 10000)}
       (async () => {
         for (const model of models) {
           try {
-            const res = await ai.models.generateContent({
-              model,
-              contents: resumeExtractionPrompt,
-              config: {
-                temperature: 0.2,
-                responseMimeType: 'application/json',
-                responseSchema: RESUME_EXTRACTION_SCHEMA,
-              },
-            });
+            const res = await withTimeout(
+              ai.models.generateContent({
+                model,
+                contents: resumeExtractionPrompt,
+                config: {
+                  temperature: 0.2,
+                  responseMimeType: 'application/json',
+                  responseSchema: RESUME_EXTRACTION_SCHEMA,
+                },
+              }),
+              12000,
+              `Resume extraction (${model})`
+            );
             if (res?.text) return JSON.parse(res.text.trim());
-          } catch {
+          } catch (err: any) {
+            console.warn(`[Analyzer] Resume extraction model ${model} failed or timed out:`, err?.message || err);
             // try next model
           }
         }
@@ -668,17 +687,22 @@ ${jobDescription.slice(0, 10000)}
       (async () => {
         for (const model of models) {
           try {
-            const res = await ai.models.generateContent({
-              model,
-              contents: jobExtractionPrompt,
-              config: {
-                temperature: 0.2,
-                responseMimeType: 'application/json',
-                responseSchema: JOB_EXTRACTION_SCHEMA,
-              },
-            });
+            const res = await withTimeout(
+              ai.models.generateContent({
+                model,
+                contents: jobExtractionPrompt,
+                config: {
+                  temperature: 0.2,
+                  responseMimeType: 'application/json',
+                  responseSchema: JOB_EXTRACTION_SCHEMA,
+                },
+              }),
+              12000,
+              `Job extraction (${model})`
+            );
             if (res?.text) return JSON.parse(res.text.trim());
-          } catch {
+          } catch (err: any) {
+            console.warn(`[Analyzer] Job extraction model ${model} failed or timed out:`, err?.message || err);
             // try next model
           }
         }
@@ -731,6 +755,10 @@ ${jobDescription.slice(0, 10000)}
   // -----------------------------------------------------------------------
   let suggestions: string[] = [];
 
+  const VERDICT_TOTAL_BUDGET_MS = 20000;
+  const VERDICT_PER_CALL_TIMEOUT_MS = 12000;
+  const verdictStartTime = Date.now();
+
   try {
     const verdictPrompt = buildVerdictPrompt(
       overall_score,
@@ -740,16 +768,31 @@ ${jobDescription.slice(0, 10000)}
     );
 
     for (const model of models) {
+      const elapsed = Date.now() - verdictStartTime;
+      const remainingBudget = VERDICT_TOTAL_BUDGET_MS - elapsed;
+      if (remainingBudget <= 1000) {
+        console.warn(
+          `[Analyzer] Verdict total budget of 20s reached (${elapsed}ms elapsed). Falling back to deterministic suggestions.`
+        );
+        break;
+      }
+
+      const timeoutForThisCall = Math.min(VERDICT_PER_CALL_TIMEOUT_MS, remainingBudget);
+
       try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: verdictPrompt,
-          config: {
-            temperature: 0.2,
-            responseMimeType: 'application/json',
-            responseSchema: VERDICT_SCHEMA,
-          },
-        });
+        const res = await withTimeout(
+          ai.models.generateContent({
+            model,
+            contents: verdictPrompt,
+            config: {
+              temperature: 0.2,
+              responseMimeType: 'application/json',
+              responseSchema: VERDICT_SCHEMA,
+            },
+          }),
+          timeoutForThisCall,
+          `Verdict generation (${model})`
+        );
         if (res?.text) {
           const parsed = JSON.parse(res.text.trim());
           if (Array.isArray(parsed?.suggestions) && parsed.suggestions.length > 0) {
@@ -757,7 +800,8 @@ ${jobDescription.slice(0, 10000)}
             break;
           }
         }
-      } catch {
+      } catch (err: any) {
+        console.warn(`[Analyzer] Verdict model ${model} failed or timed out:`, err?.message || err);
         // try next model
       }
     }

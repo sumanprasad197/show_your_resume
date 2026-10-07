@@ -1,3 +1,12 @@
+import * as pdfjsLib from 'pdfjs-dist';
+// @ts-ignore - Vite asset URL query import
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+}
+
 /**
  * Converts a File object to a clean base64-encoded string without whitespace.
  */
@@ -16,7 +25,75 @@ export function fileToBase64(file: File): Promise<string> {
 }
 
 /**
+ * Renders each page of a PDF to a canvas and exports it as a JPEG base64 string
+ * (quality ~0.85, scale ~2.0 for legibility). Limited to the first 5 pages.
+ */
+export async function renderPdfPagesToJpegBase64(file: File, maxPages = 5): Promise<string[]> {
+  if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    throw new Error('PDF file buffer is empty (0 bytes).');
+  }
+
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    useSystemFonts: true,
+    stopAtErrors: false,
+  });
+
+  const pdfDoc = await loadingTask.promise;
+  const numPagesToRender = Math.min(pdfDoc.numPages, maxPages);
+  const imagesBase64: string[] = [];
+
+  for (let pageNum = 1; pageNum <= numPagesToRender; pageNum++) {
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 2.0 });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) {
+      throw new Error('Could not create 2D canvas context for PDF page rendering.');
+    }
+
+    // Fill white background for JPEG rendering (avoid black transparent regions)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const renderContext = {
+      canvasContext: ctx,
+      viewport,
+      canvas,
+    };
+    await page.render(renderContext as any).promise;
+
+    // Export as JPEG data URL (quality ~0.85)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    // Strip data-URL prefix ("data:image/jpeg;base64,") and any whitespace
+    const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+    imagesBase64.push(cleanBase64);
+
+    // Free canvas memory
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  if (imagesBase64.length === 0) {
+    throw new Error('0 pages were rendered from PDF.');
+  }
+
+  return imagesBase64;
+}
+
+/**
  * Sends a scanned/image-based PDF to the server-side OCR endpoint.
+ * First renders pages to JPEG images using pdf.js; falls back to raw PDF base64 if rendering fails.
  * Limited to PDFs under 10 MB.
  */
 export async function requestOcrForPdf(file: File): Promise<string> {
@@ -29,7 +106,16 @@ export async function requestOcrForPdf(file: File): Promise<string> {
     );
   }
 
-  const pdfBase64 = await fileToBase64(file);
+  let imagesBase64: string[] | null = null;
+  let pdfBase64: string | null = null;
+
+  try {
+    imagesBase64 = await renderPdfPagesToJpegBase64(file, 5);
+    console.log(`[OCR Client] Successfully rendered ${imagesBase64.length} page(s) to JPEG (scale 2, quality 0.85).`);
+  } catch (renderErr) {
+    console.warn('[OCR Client] PDF page rendering to images failed. Falling back to raw PDF base64:', renderErr);
+    pdfBase64 = await fileToBase64(file);
+  }
 
   let response: Response;
   try {
@@ -38,7 +124,10 @@ export async function requestOcrForPdf(file: File): Promise<string> {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ pdfBase64 }),
+      body: JSON.stringify({
+        imagesBase64: imagesBase64 && imagesBase64.length > 0 ? imagesBase64 : undefined,
+        pdfBase64: pdfBase64 || undefined,
+      }),
     });
   } catch (netErr: any) {
     console.error('Network error calling /api/ocr:', netErr);

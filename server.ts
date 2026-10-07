@@ -36,10 +36,11 @@ app.route('/api/ocr')
   .post(async (req, res) => {
     try {
       const pdfBase64 = req.body?.pdfBase64;
-      if (!pdfBase64 || typeof pdfBase64 !== 'string') {
-        return res.status(400).json({ error: 'No PDF data provided for OCR extraction (empty payload received).' });
+      const imagesBase64 = req.body?.imagesBase64;
+      if (!pdfBase64 && (!Array.isArray(imagesBase64) || imagesBase64.length === 0)) {
+        return res.status(400).json({ error: 'No PDF or page image data provided for OCR extraction (empty payload received).' });
       }
-      const result = await performOcr({ pdfBase64 });
+      const result = await performOcr({ pdfBase64, imagesBase64 });
       return res.status(200).json(result);
     } catch (error: any) {
       console.error('[Server /api/ocr caught error]:', error);
