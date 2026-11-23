@@ -557,7 +557,10 @@ function generateDeterministicSuggestions(
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: NodeJS.Timeout;
+  // Prevent unhandled rejection if the underlying SDK call rejects after the timeout wins
+  promise.catch(() => {});
+
+  let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(new Error(`[Timeout] ${label} exceeded ${ms}ms limit`));
@@ -567,6 +570,47 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
     return await Promise.race([promise, timeoutPromise]);
   } finally {
     clearTimeout(timer!);
+  }
+}
+
+async function raceModels<T>(
+  models: string[],
+  stageLabel: string,
+  perCallTimeoutMs: number,
+  runModel: (model: string) => Promise<T>,
+  totalBudgetMs?: number
+): Promise<T | null> {
+  const attempts = models.map((model) => {
+    const attemptPromise = withTimeout(
+      runModel(model),
+      perCallTimeoutMs,
+      `${stageLabel} (${model})`
+    )
+      .then((result) => {
+        console.log(`[Analyzer] ${stageLabel} won by model ${model}`);
+        return result;
+      })
+      .catch((err: any) => {
+        console.warn(`[Analyzer] ${stageLabel} model ${model} failed or timed out:`, err?.message || err);
+        throw err;
+      });
+
+    // Guard against unhandled rejections from losing calls after Promise.any settles
+    attemptPromise.catch(() => {});
+    return attemptPromise;
+  });
+
+  const racePromise = Promise.any(attempts);
+  racePromise.catch(() => {});
+
+  try {
+    if (typeof totalBudgetMs === 'number') {
+      return await withTimeout(racePromise, totalBudgetMs, `${stageLabel} total budget`);
+    }
+    return await racePromise;
+  } catch (err: any) {
+    console.warn(`[Analyzer] ${stageLabel} failed across all models or exceeded budget:`, err?.message || err);
+    return null;
   }
 }
 
@@ -657,57 +701,51 @@ JOB DESCRIPTION:
 ${jobDescription.slice(0, 10000)}
 """`;
 
-  // Run Stage 1 extraction in parallel for fast performance
+  const PER_CALL_TIMEOUT_MS = 10000;
+
+  // Run Stage 1 extraction in parallel, racing all models simultaneously per extraction
   try {
     const [resumeResult, jobResult] = await Promise.all([
-      (async () => {
-        for (const model of models) {
-          try {
-            const res = await withTimeout(
-              ai.models.generateContent({
-                model,
-                contents: resumeExtractionPrompt,
-                config: {
-                  temperature: 0.2,
-                  responseMimeType: 'application/json',
-                  responseSchema: RESUME_EXTRACTION_SCHEMA,
-                },
-              }),
-              12000,
-              `Resume extraction (${model})`
-            );
-            if (res?.text) return JSON.parse(res.text.trim());
-          } catch (err: any) {
-            console.warn(`[Analyzer] Resume extraction model ${model} failed or timed out:`, err?.message || err);
-            // try next model
+      raceModels<ResumeExtraction>(
+        models,
+        'Resume extraction',
+        PER_CALL_TIMEOUT_MS,
+        async (model) => {
+          const res = await ai.models.generateContent({
+            model,
+            contents: resumeExtractionPrompt,
+            config: {
+              temperature: 0.2,
+              responseMimeType: 'application/json',
+              responseSchema: RESUME_EXTRACTION_SCHEMA,
+            },
+          });
+          if (!res?.text) {
+            throw new Error(`Empty response from ${model}`);
           }
+          return JSON.parse(res.text.trim()) as ResumeExtraction;
         }
-        return null;
-      })(),
-      (async () => {
-        for (const model of models) {
-          try {
-            const res = await withTimeout(
-              ai.models.generateContent({
-                model,
-                contents: jobExtractionPrompt,
-                config: {
-                  temperature: 0.2,
-                  responseMimeType: 'application/json',
-                  responseSchema: JOB_EXTRACTION_SCHEMA,
-                },
-              }),
-              12000,
-              `Job extraction (${model})`
-            );
-            if (res?.text) return JSON.parse(res.text.trim());
-          } catch (err: any) {
-            console.warn(`[Analyzer] Job extraction model ${model} failed or timed out:`, err?.message || err);
-            // try next model
+      ),
+      raceModels<JobDescriptionExtraction>(
+        models,
+        'Job extraction',
+        PER_CALL_TIMEOUT_MS,
+        async (model) => {
+          const res = await ai.models.generateContent({
+            model,
+            contents: jobExtractionPrompt,
+            config: {
+              temperature: 0.2,
+              responseMimeType: 'application/json',
+              responseSchema: JOB_EXTRACTION_SCHEMA,
+            },
+          });
+          if (!res?.text) {
+            throw new Error(`Empty response from ${model}`);
           }
+          return JSON.parse(res.text.trim()) as JobDescriptionExtraction;
         }
-        return null;
-      })(),
+      ),
     ]);
 
     extractedResume = resumeResult;
@@ -750,14 +788,12 @@ ${jobDescription.slice(0, 10000)}
   const { overall_score, breakdown } = computeDeterministicScore(matchResults);
 
   // -----------------------------------------------------------------------
-  // STAGE 4 — VERDICT (ONE GEMINI CALL, TEMPERATURE 0.2)
+  // STAGE 4 — VERDICT (PARALLEL RACE, TEMPERATURE 0.2)
   // Receives ONLY computed numbers & match lists. Does NOT alter any scores.
   // -----------------------------------------------------------------------
   let suggestions: string[] = [];
 
-  const VERDICT_TOTAL_BUDGET_MS = 20000;
-  const VERDICT_PER_CALL_TIMEOUT_MS = 12000;
-  const verdictStartTime = Date.now();
+  const VERDICT_TOTAL_BUDGET_MS = 15000;
 
   try {
     const verdictPrompt = buildVerdictPrompt(
@@ -767,43 +803,34 @@ ${jobDescription.slice(0, 10000)}
       matchResults.missingKeywords
     );
 
-    for (const model of models) {
-      const elapsed = Date.now() - verdictStartTime;
-      const remainingBudget = VERDICT_TOTAL_BUDGET_MS - elapsed;
-      if (remainingBudget <= 1000) {
-        console.warn(
-          `[Analyzer] Verdict total budget of 20s reached (${elapsed}ms elapsed). Falling back to deterministic suggestions.`
-        );
-        break;
-      }
-
-      const timeoutForThisCall = Math.min(VERDICT_PER_CALL_TIMEOUT_MS, remainingBudget);
-
-      try {
-        const res = await withTimeout(
-          ai.models.generateContent({
-            model,
-            contents: verdictPrompt,
-            config: {
-              temperature: 0.2,
-              responseMimeType: 'application/json',
-              responseSchema: VERDICT_SCHEMA,
-            },
-          }),
-          timeoutForThisCall,
-          `Verdict generation (${model})`
-        );
-        if (res?.text) {
-          const parsed = JSON.parse(res.text.trim());
-          if (Array.isArray(parsed?.suggestions) && parsed.suggestions.length > 0) {
-            suggestions = parsed.suggestions;
-            break;
-          }
+    const racedSuggestions = await raceModels<string[]>(
+      models,
+      'Verdict generation',
+      PER_CALL_TIMEOUT_MS,
+      async (model) => {
+        const res = await ai.models.generateContent({
+          model,
+          contents: verdictPrompt,
+          config: {
+            temperature: 0.2,
+            responseMimeType: 'application/json',
+            responseSchema: VERDICT_SCHEMA,
+          },
+        });
+        if (!res?.text) {
+          throw new Error(`Empty response from ${model}`);
         }
-      } catch (err: any) {
-        console.warn(`[Analyzer] Verdict model ${model} failed or timed out:`, err?.message || err);
-        // try next model
-      }
+        const parsed = JSON.parse(res.text.trim());
+        if (!Array.isArray(parsed?.suggestions) || parsed.suggestions.length === 0) {
+          throw new Error(`Invalid or empty suggestions array from ${model}`);
+        }
+        return parsed.suggestions as string[];
+      },
+      VERDICT_TOTAL_BUDGET_MS
+    );
+
+    if (racedSuggestions && racedSuggestions.length > 0) {
+      suggestions = racedSuggestions;
     }
   } catch (err) {
     console.error('Verdict generation error:', err);
